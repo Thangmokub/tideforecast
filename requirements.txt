@@ -1,0 +1,5 @@
+streamlit
+pandas
+matplotlib
+prophet==1.1.5
+cmdstanpy==1.1.0

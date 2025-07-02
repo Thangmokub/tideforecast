@@ -102,7 +102,7 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-    file_path = r"C:\\Users\\best0\\Downloads\\BP2025_all_months_for_prophet.csv"
+    file_path = "BP2025_all_months_for_prophet.csv"
 
     if not os.path.isfile(file_path):
         st.error(f"❌ ไม่พบไฟล์: {file_path}")

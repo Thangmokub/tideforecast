@@ -2,82 +2,81 @@ import streamlit as st
 import pandas as pd
 from prophet import Prophet
 import matplotlib.pyplot as plt
-import os
+from datetime import datetime, timedelta
+import requests
+from bs4 import BeautifulSoup
 
-# ตั้งค่าเพจ
+# -------------------------------
+# ฟังก์ชันดึงข้อมูลจากเว็บไซต์
+# -------------------------------
+@st.cache_data(ttl=3600)
+def fetch_tide_data():
+    url = "https://www.thailandtidetables.com/ไทย/ตารางน้ำขึ้นน้ำลง-ปากน้ำบางปะกง-ฉะเชิงเทรา-480.php"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, "html.parser")
+    table = soup.find("table", {"class": "tide-table"})
+
+    if not table:
+        return pd.DataFrame(), "❌ ไม่พบตารางในเว็บไซต์"
+
+    rows = table.find_all("tr")
+    data = []
+
+    for row in rows[1:]:
+        cols = row.find_all("td")
+        if len(cols) >= 2:
+            time_str = cols[0].text.strip()
+            level_str = cols[1].text.strip().replace("m", "")
+            try:
+                dt = datetime.strptime(time_str, "%H:%M")
+                full_dt = datetime.combine(datetime.today(), dt.time())
+                level = float(level_str)
+                data.append({"ds": full_dt, "y": level})
+            except:
+                continue
+
+    if not data:
+        return pd.DataFrame(), "⚠️ ไม่พบข้อมูลที่แปลงได้"
+
+    df = pd.DataFrame(data)
+    return df, None
+
+# -------------------------------
+# เริ่มต้น Streamlit App
+# -------------------------------
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
-# สร้างสถานะเริ่มต้น
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
-# CSS + JS
+# CSS/JS Styling
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
-
     html, body, .stApp {
         background-color: #f1f8e9;
         font-family: 'Kanit', sans-serif;
         color: #1b5e20;
-        transition: all 0.3s ease-in-out;
     }
-
     .block-container { padding-top: 2rem; }
-
-    h1, h2, h3, h4 {
-        color: #2e7d32;
-        animation: fadeIn 1s ease-out;
-    }
-
     .fade-box {
         background: linear-gradient(to right, #dcedc8, #f0f4c3);
         border-left: 8px solid #81c784;
         border-radius: 12px;
         padding: 20px;
         margin-bottom: 20px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        animation: fadeInUp 1s ease-out;
     }
-
     .stButton>button {
         background-color: #66bb6a;
         color: white;
         border-radius: 8px;
-        padding: 0.5em 1.5em;
         font-size: 18px;
-        transition: all 0.3s ease-in-out;
     }
-
     .stButton>button:hover {
         background-color: #388e3c;
         transform: scale(1.03);
     }
-
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
-    @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
     </style>
-    <script>
-    document.addEventListener('contextmenu', function(event) {
-        event.preventDefault();
-        alert('❌ ไม่สามารถคลิกขวาได้บนเว็บไซต์นี้');
-    });
-    document.addEventListener('keydown', function (event) {
-        if ((event.ctrlKey && event.key.toLowerCase() === 'c') ||
-            (event.ctrlKey && event.key.toLowerCase() === 'u') ||
-            event.key === 'F12') {
-            event.preventDefault();
-            alert('🔒 ห้ามคัดลอกหรือดูซอร์สโค้ดหน้านี้');
-        }
-    });
-    </script>
 """, unsafe_allow_html=True)
 
 # หน้าเริ่มต้น
@@ -93,81 +92,74 @@ if not st.session_state.app_started:
         st.session_state.app_started = True
         st.rerun()
 
+# -------------------------------
 # หน้าแอปหลัก
+# -------------------------------
 else:
     st.markdown("""
     <div class="fade-box">
         <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
-        <p>ยินดีต้อนรับ! คุณสามารถเลือกวันและดูแนวโน้มระดับน้ำได้เพื่อการเพาะปลูกที่แม่นยำ</p>
+        <p>แสดงข้อมูลจากปากน้ำบางปะกงแบบเรียลไทม์</p>
     </div>
     """, unsafe_allow_html=True)
 
-    file_path = "BP2025_all_months_for_prophet.csv"
+    df, error = fetch_tide_data()
 
-    if not os.path.isfile(file_path):
-        st.error(f"❌ ไม่พบไฟล์: {file_path}")
+    if error:
+        st.error(error)
+    elif df.empty:
+        st.warning("ไม่พบข้อมูล")
     else:
-        df = pd.read_csv(file_path)
+        df['ds'] = pd.to_datetime(df['ds'])
 
-        date_col = next((c for c in ['ds', 'date', 'วันที่', 'Date', 'datetime'] if c in df.columns), None)
-        if not date_col:
-            st.error("❌ ไม่พบคอลัมน์วันที่ในไฟล์")
-        else:
-            df['ds'] = pd.to_datetime(df[date_col])
+        menu = st.sidebar.selectbox("เลือกเมนู", ["เลือกวันและพยากรณ์", "สรุปผลการพยากรณ์"])
 
-            if 'y' not in df.columns:
-                st.error("❌ ไม่พบคอลัมน์ 'y' (ค่าระดับน้ำ)")
+        if menu == "เลือกวันและพยากรณ์":
+            st.title("📅 พยากรณ์น้ำขึ้น-น้ำลงแบบเรียลไทม์")
+
+            selected_date = st.date_input("เลือกวันที่", value=datetime.today())
+            selected_date = pd.to_datetime(selected_date)
+
+            df_today = df[df['ds'].dt.date == selected_date.date()]
+            if df_today.empty:
+                st.warning("❌ ไม่มีข้อมูลของวันนี้")
             else:
-                menu = st.sidebar.selectbox("เลือกเมนู", ["เลือกวันและพยากรณ์", "สรุปผลการพยากรณ์"])
+                st.dataframe(df_today)
 
-                if menu == "เลือกวันและพยากรณ์":
-                    st.title("📅 พยากรณ์น้ำขึ้น-น้ำลงแบบเลือกวัน")
-                    selected_date = st.date_input("เลือกวันที่ต้องการดู", value=pd.to_datetime("2025-01-01"))
-                    selected_date = pd.to_datetime(selected_date)
+            st.subheader("🔮 พยากรณ์ล่วงหน้า")
+            periods = st.slider("พยากรณ์กี่ชั่วโมง?", 6, 72, 24)
 
-                    df_today = df[df['ds'].dt.normalize() == selected_date]
-                    if df_today.empty:
-                        st.warning("❌ ไม่มีข้อมูลในวันนี้")
+            df_past = df[df['ds'] <= datetime.now()]
+            if len(df_past) < 10:
+                st.warning("⚠️ ข้อมูลไม่เพียงพอ")
+            else:
+                model = Prophet()
+                with st.spinner("กำลังพยากรณ์..."):
+                    model.fit(df_past)
+                    future = model.make_future_dataframe(periods=periods, freq='H')
+                    forecast = model.predict(future)
+
+                st.session_state['forecast'] = forecast
+                st.session_state['periods'] = periods
+
+                st.subheader("📈 กราฟผลลัพธ์")
+                fig = model.plot(forecast)
+                st.pyplot(fig)
+
+                st.subheader("📊 ตารางคาดการณ์ล่าสุด")
+                st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
+
+        elif menu == "สรุปผลการพยากรณ์":
+            if 'forecast' in st.session_state:
+                forecast = st.session_state['forecast']
+                periods = st.session_state['periods']
+                if len(forecast) > periods:
+                    delta = forecast.iloc[-1]['yhat'] - forecast.iloc[-periods]['yhat']
+                    if delta > 0:
+                        st.success(f"🌊 คาดว่าน้ำจะขึ้น {delta:.2f} เมตร")
                     else:
-                        st.dataframe(df_today)
-
-                    st.subheader("🔮 พยากรณ์ล่วงหน้า")
-                    periods = st.slider("พยากรณ์กี่ชั่วโมง?", 6, 168, 24)
-
-                    df_past = df[df['ds'] <= selected_date]
-                    if len(df_past) < 10:
-                        st.warning("⚠️ ข้อมูลในอดีตไม่เพียงพอ")
-                    else:
-                        model = Prophet()
-                        try:
-                            with st.spinner("กำลังพยากรณ์..."):
-                                model.fit(df_past)
-                                future = model.make_future_dataframe(periods=periods, freq='H')
-                                forecast = model.predict(future)
-
-                            st.session_state['forecast'] = forecast
-                            st.session_state['periods'] = periods
-
-                            st.subheader("📈 กราฟผลลัพธ์")
-                            fig = model.plot(forecast)
-                            st.pyplot(fig)
-
-                            st.subheader("📊 ตารางคาดการณ์ล่าสุด")
-                            st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-                        except Exception as e:
-                            st.error(f"เกิดข้อผิดพลาด: {e}")
-
-                elif menu == "สรุปผลการพยากรณ์":
-                    if 'forecast' in st.session_state:
-                        forecast = st.session_state['forecast']
-                        periods = st.session_state['periods']
-                        if len(forecast) > periods:
-                            delta = forecast.iloc[-1]['yhat'] - forecast.iloc[-periods]['yhat']
-                            if delta > 0:
-                                st.success(f"🌊 คาดว่าน้ำจะขึ้น {delta:.2f} เมตร")
-                            else:
-                                st.info(f"⬇️ คาดว่าน้ำจะลด {abs(delta):.2f} เมตร")
-                        else:
-                            st.warning("⚠️ ข้อมูลไม่เพียงพอสำหรับการเปรียบเทียบ")
-                    else:
-                        st.warning("⚠️ กรุณาพยากรณ์ก่อนในเมนูแรก")
+                        st.info(f"⬇️ คาดว่าน้ำจะลด {abs(delta):.2f} เมตร")
+                else:
+                    st.warning("⚠️ ข้อมูลไม่เพียงพอสำหรับเปรียบเทียบ")
+            else:
+                st.warning("⚠️ กรุณาพยากรณ์ก่อนในเมนูแรก")

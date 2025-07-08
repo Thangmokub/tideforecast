@@ -91,7 +91,7 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        st.rerun()
+        st.experimental_rerun()
 
 # หน้าแอปหลัก
 else:
@@ -148,8 +148,18 @@ else:
                             st.session_state['forecast'] = forecast
                             st.session_state['periods'] = periods
 
+                            # ค่ากลางระดับน้ำและเส้นแจ้งเตือน
+                            median_level = 2.82
+                            high_threshold = 3.51
+                            low_threshold = 1.90
+
                             st.subheader("📈 กราฟผลลัพธ์")
                             fig = model.plot(forecast)
+                            ax = fig.gca()
+                            ax.axhline(median_level, color='green', linestyle='--', label='ระดับน้ำปกติ (2.82 ม.)')
+                            ax.axhline(high_threshold, color='red', linestyle='--', label='🚨 น้ำขึ้นสูงเกิน (≥ 3.51 ม.)')
+                            ax.axhline(low_threshold, color='blue', linestyle='--', label='⚠️ น้ำลดต่ำเกิน (≤ 1.90 ม.)')
+                            ax.legend()
                             st.pyplot(fig)
 
                             st.subheader("📊 ตารางคาดการณ์ล่าสุด")

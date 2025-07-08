@@ -71,7 +71,6 @@ st.markdown("""
     </script>
 """, unsafe_allow_html=True)
 
-# ฟังก์ชันดึงข้อมูลน้ำขึ้นน้ำลงแบบเรียลไทม์
 @st.cache_data(ttl=3600)
 def fetch_tide_data():
     url = "https://www.thailandtidetables.com/ไทย/ตารางน้ำขึ้นน้ำลง-ปากน้ำบางปะกง-ฉะเชิงเทรา-480.php"
@@ -87,14 +86,27 @@ def fetch_tide_data():
         return pd.DataFrame(), f"❌ ดึงข้อมูลไม่ได้: {e}"
 
     soup = BeautifulSoup(response.content, "html.parser")
-    table = soup.find("table", {"class": "tide-table"})
-    if not table:
-        return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
 
+    # หาวันที่ประกาศจากหัวข้อ (h2, caption, หรือ strong)
     date_text = soup.find("h2") or soup.find("caption") or soup.find("strong")
     if not date_text:
         return pd.DataFrame(), "❌ ไม่พบวันที่จากเว็บไซต์"
+    st.write("วันที่ที่เจอ:", date_text.get_text(strip=True))  # แสดงวันที่ที่เจอ
 
+    # หา table ที่มีข้อมูลน้ำขึ้นน้ำลง โดยดูจากตารางที่มีเวลารูปแบบ HH:MM ในคอลัมน์แรก
+    tables = soup.find_all("table")
+    table = None
+    for t in tables:
+        first_td = t.find("td")
+        if first_td:
+            text = first_td.get_text(strip=True)
+            if re.match(r"\d{1,2}:\d{2}", text):
+                table = t
+                break
+    if not table:
+        return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
+
+    # ดึงข้อมูลวันที่จากข้อความหัวข้อ
     text = date_text.get_text(strip=True)
     match = re.search(r"(?:วันที่|ประจำวันที่)\s*(\d{1,2})\s*(\S+)\s*(\d{4})", text)
     if not match:
@@ -155,7 +167,7 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        # ไม่ต้องเรียก st.experimental_rerun()
+        st.experimental_rerun()  # เรียกรีเฟรชหน้าใหม่ทันที
 
 # หน้าแอปหลักเมื่อเริ่มใช้งานแล้ว
 else:

@@ -103,9 +103,13 @@ def fetch_tide_data():
         return pd.DataFrame(), f"❌ ดึงข้อมูลไม่ได้: {e}"
 
     soup = BeautifulSoup(response.content, "html.parser")
-    table = soup.find("table", {"class": "tide-table"})
+    # แก้ตรงนี้
+    table = soup.find("table", {"class": "table table-bordered table-hover"})
     if not table:
         return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
+
+    # (ส่วนอื่น ๆ ของโค้ดยังคงเหมือนเดิม)
+
 
     date_text_str = find_date_text(soup)
     if not date_text_str:

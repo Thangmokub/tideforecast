@@ -108,8 +108,8 @@ def fetch_tide_data():
     if not date_text:
         return pd.DataFrame(), "❌ ไม่พบวันที่จากเว็บไซต์"
 
-    text = date_text.get_text()
-    match = re.search(r"วันที่\s*(\d{1,2})\s*(\S+)\s*(\d{4})", text)
+    text = date_text.get_text(strip=True)
+    match = re.search(r"(?:วันที่|ประจำวันที่)\s*(\d{1,2})\s*(\S+)\s*(\d{4})", text)
     if not match:
         return pd.DataFrame(), "❌ ไม่สามารถอ่านวันที่ได้"
 

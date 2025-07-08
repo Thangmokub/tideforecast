@@ -71,23 +71,7 @@ st.markdown("""
     </script>
 """, unsafe_allow_html=True)
 
-
-def find_date_text(soup):
-    # หาแท็กหลายแบบที่อาจมีวันที่
-    candidates = []
-    for tag_name in ['h3', 'caption', 'p', 'strong']:
-        elements = soup.find_all(tag_name)
-        for el in elements:
-            text = el.get_text(strip=True)
-            if "วันที่" in text or "ประจำวันที่" in text:
-                candidates.append(text)
-    date_pattern = re.compile(r"(?:วันที่|ประจำวันที่)\s*(\d{1,2})\s*(\S+)\s*(\d{4})")
-    for text in candidates:
-        if date_pattern.search(text):
-            return text
-    return None
-
-
+# ฟังก์ชันดึงข้อมูลน้ำขึ้นน้ำลงแบบเรียลไทม์
 @st.cache_data(ttl=3600)
 def fetch_tide_data():
     url = "https://www.thailandtidetables.com/ไทย/ตารางน้ำขึ้นน้ำลง-ปากน้ำบางปะกง-ฉะเชิงเทรา-480.php"
@@ -103,22 +87,14 @@ def fetch_tide_data():
         return pd.DataFrame(), f"❌ ดึงข้อมูลไม่ได้: {e}"
 
     soup = BeautifulSoup(response.content, "html.parser")
-    # แก้ตรงนี้
-    table = soup.find("table", {"class": "table table-bordered table-hover"})
-    if not table:
-        return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
 
-    # (ส่วนอื่น ๆ ของโค้ดยังคงเหมือนเดิม)
-
-
-    date_text_str = find_date_text(soup)
-    if not date_text_str:
+    # หา tag วันที่ จาก class ที่กำหนด
+    date_text = soup.find(class_="text-center bg-info text-white")
+    if not date_text:
         return pd.DataFrame(), "❌ ไม่พบวันที่จากเว็บไซต์"
+    text = date_text.get_text(strip=True)
 
-    # Debug: แสดงวันที่ที่เจอ (ลบออกได้ถ้าอยาก)
-    st.write("วันที่ที่เจอ:", date_text_str)
-
-    match = re.search(r"(?:วันที่|ประจำวันที่)\s*(\d{1,2})\s*(\S+)\s*(\d{4})", date_text_str)
+    match = re.search(r"(?:วันที่|ประจำวันที่)\s*(\d{1,2})\s*(\S+)\s*(\d{4})", text)
     if not match:
         return pd.DataFrame(), "❌ ไม่สามารถอ่านวันที่ได้"
 
@@ -141,6 +117,11 @@ def fetch_tide_data():
     except:
         return pd.DataFrame(), "❌ วันที่ไม่ถูกต้อง"
 
+    # ดึงตารางน้ำขึ้นน้ำลง class ใหม่ที่เจอ
+    table = soup.find("table", {"class": "table table-bordered table-hover"})
+    if not table:
+        return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
+
     rows = table.find_all("tr")
     data = []
     for row in rows[1:]:
@@ -161,7 +142,6 @@ def fetch_tide_data():
 
     df = pd.DataFrame(data)
     return df, None
-
 
 # เริ่มต้นตัวแปร session_state
 if 'app_started' not in st.session_state:

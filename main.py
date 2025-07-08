@@ -7,32 +7,24 @@ from bs4 import BeautifulSoup
 import requests
 import re
 
-# -------------------------------
 # ตั้งค่าหน้า
-# -------------------------------
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
-# -------------------------------
-# CSS + JS
-# -------------------------------
+# CSS + JS สำหรับหน้าตาและป้องกันคลิกขวา คัดลอก
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
-
     html, body, .stApp {
         background-color: #f1f8e9;
         font-family: 'Kanit', sans-serif;
         color: #1b5e20;
         transition: all 0.3s ease-in-out;
     }
-
     .block-container { padding-top: 2rem; }
-
     h1, h2, h3, h4 {
         color: #2e7d32;
         animation: fadeIn 1s ease-out;
     }
-
     .fade-box {
         background: linear-gradient(to right, #dcedc8, #f0f4c3);
         border-left: 8px solid #81c784;
@@ -42,7 +34,6 @@ st.markdown("""
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         animation: fadeInUp 1s ease-out;
     }
-
     .stButton>button {
         background-color: #66bb6a;
         color: white;
@@ -51,23 +42,19 @@ st.markdown("""
         font-size: 18px;
         transition: all 0.3s ease-in-out;
     }
-
     .stButton>button:hover {
         background-color: #388e3c;
         transform: scale(1.03);
     }
-
     @keyframes fadeIn {
         from { opacity: 0; }
         to { opacity: 1; }
     }
-
     @keyframes fadeInUp {
         from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }
     }
     </style>
-
     <script>
     document.addEventListener('contextmenu', function(event) {
         event.preventDefault();
@@ -84,9 +71,7 @@ st.markdown("""
     </script>
 """, unsafe_allow_html=True)
 
-# -------------------------------
-# ฟังก์ชันดึงข้อมูลจากเว็บไซต์
-# -------------------------------
+# ฟังก์ชันดึงข้อมูลน้ำขึ้นน้ำลงแบบเรียลไทม์
 @st.cache_data(ttl=3600)
 def fetch_tide_data():
     url = "https://www.thailandtidetables.com/ไทย/ตารางน้ำขึ้นน้ำลง-ปากน้ำบางปะกง-ฉะเชิงเทรา-480.php"
@@ -103,6 +88,8 @@ def fetch_tide_data():
 
     soup = BeautifulSoup(response.content, "html.parser")
     table = soup.find("table", {"class": "tide-table"})
+    if not table:
+        return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
 
     date_text = soup.find("h2") or soup.find("caption") or soup.find("strong")
     if not date_text:
@@ -153,9 +140,7 @@ def fetch_tide_data():
     df = pd.DataFrame(data)
     return df, None
 
-# -------------------------------
 # เริ่มต้นแอป
-# -------------------------------
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
@@ -171,9 +156,6 @@ if not st.session_state.app_started:
         st.session_state.app_started = True
         st.experimental_rerun()
 
-# -------------------------------
-# หน้าแอปหลัก
-# -------------------------------
 else:
     df, error = fetch_tide_data()
 

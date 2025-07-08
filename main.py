@@ -113,7 +113,11 @@ def fetch_tide_data():
     if not match:
         return pd.DataFrame(), "❌ ไม่สามารถอ่านวันที่ได้"
 
-    day, month_th, year = match.groups()
+    day, month_th, year_str = match.groups()
+    year = int(year_str)
+    if year > 2500:  # แปลงปี พ.ศ. เป็น ค.ศ.
+        year -= 543
+
     month_map = {
         "มกราคม": 1, "กุมภาพันธ์": 2, "มีนาคม": 3, "เมษายน": 4,
         "พฤษภาคม": 5, "มิถุนายน": 6, "กรกฎาคม": 7, "สิงหาคม": 8,
@@ -124,7 +128,7 @@ def fetch_tide_data():
         return pd.DataFrame(), f"❌ ไม่รู้จักเดือน: {month_th}"
 
     try:
-        base_date = datetime(int(year), month, int(day))
+        base_date = datetime(year, month, int(day))
     except:
         return pd.DataFrame(), "❌ วันที่ไม่ถูกต้อง"
 
@@ -165,7 +169,7 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        st.rerun()
+        st.experimental_rerun()
 
 # -------------------------------
 # หน้าแอปหลัก

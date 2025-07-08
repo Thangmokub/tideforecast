@@ -152,7 +152,7 @@ if not st.session_state.app_started:
     </div>
     """, unsafe_allow_html=True)
 
-    if st.button("เริ่มใช้งาน"):
+if st.button("เริ่มใช้งาน"):
     st.session_state.app_started = True
     st.experimental_rerun()
 

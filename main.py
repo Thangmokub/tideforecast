@@ -110,7 +110,7 @@ else:
             st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
             return pd.DataFrame()
 
-    files = ['','บางปะกง.csv', 'บางปะกง (3).csv']
+    files = ['BP2025_all_months_for_prophet.csv','บางปะกง.csv', 'บางปะกง (3).csv']
     dfs = [load_and_clean_csv(f) for f in files if os.path.isfile(f)]
     df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
 

@@ -68,27 +68,33 @@ else:
     st.markdown("""
     <div class="fade-box">
         <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
-        <p>ยินดีต้อน! คุณสามารถเลือกวันและดูแนวโน้มระดับน้ำได้เพื่อการเพาะปลูกที่แม่นยำ</p>
+        <p>ยินดีต้อนรับ! คุณสามารถเลือกวันและดูแนวโน้มระดับน้ำได้เพื่อการเพาะปลูกที่แม่นยำ</p>
     </div>
     """, unsafe_allow_html=True)
+
+    def load_and_clean_df(df):
+        try:
+            def convert(row):
+                try:
+                    d, m, y_th = map(int, str(row['วันที่']).split("/"))
+                    y_ad = y_th - 543
+                    h, mi, s = map(int, str(row['เวลา']).split(":"))
+                    return datetime(y_ad, m, d, h, mi, s)
+                except:
+                    return pd.NaT
+
+            df['ds'] = df.apply(convert, axis=1)
+            df['y'] = pd.to_numeric(df['ระดับน้ำ'], errors='coerce')
+            return df[['ds', 'y']].dropna()
+        except:
+            return pd.DataFrame()
 
     def load_and_clean_csv(file):
         try:
             df = pd.read_csv(file, encoding='utf-8')
 
             if {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
-                def convert(row):
-                    try:
-                        d, m, y_th = map(int, str(row['วันที่']).split("/"))
-                        y_ad = y_th - 543
-                        h, mi, s = map(int, str(row['เวลา']).split(":"))
-                        return datetime(y_ad, m, d, h, mi, s)
-                    except:
-                        return pd.NaT
-
-                df['ds'] = df.apply(convert, axis=1)
-                df['y'] = pd.to_numeric(df['ระดับน้ำ'], errors='coerce')
-                return df[['ds', 'y']].dropna()
+                return load_and_clean_df(df)
 
             elif {'ds', 'y'}.issubset(df.columns):
                 df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
@@ -97,7 +103,7 @@ else:
 
             elif df.shape[1] >= 3:
                 df.columns = ['วันที่', 'เวลา', 'ระดับน้ำ']
-                return load_and_clean_csv(file)
+                return load_and_clean_df(df)
 
             return pd.DataFrame()
         except Exception as e:

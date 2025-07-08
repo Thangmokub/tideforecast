@@ -67,14 +67,14 @@ st.markdown("""
     <script>
     document.addEventListener('contextmenu', function(event) {
         event.preventDefault();
-        alert('❌ ไม่สามารถคลิกขวาได้บนเว็บไซต์นี้');
+        alert('\u274c \u0e44\u0e21\u0e48\u0e2a\u0e32\u0e21\u0e32\u0e23\u0e16\u0e04\u0e25\u0e34\u0e01\u0e02\u0e27\u0e32\u0e44\u0e14\u0e49\u0e1a\u0e19\u0e40\u0e27\u0e47\u0e1a\u0e44\u0e0b\u0e15\u0e4c\u0e19\u0e35\u0e49');
     });
     document.addEventListener('keydown', function (event) {
         if ((event.ctrlKey && event.key.toLowerCase() === 'c') ||
             (event.ctrlKey && event.key.toLowerCase() === 'u') ||
             event.key === 'F12') {
             event.preventDefault();
-            alert('🔒 ห้ามคัดลอกหรือดูซอร์สโค้ดหน้านี้');
+            alert('\ud83d\udd12 \u0e2b\u0e49\u0e32\u0e21\u0e04\u0e31\u0e14\u0e25\u0e2d\u0e01\u0e2b\u0e23\u0e37\u0e2d\u0e14\u0e39\u0e0b\u0e2d\u0e23\u0e4c\u0e2a\u0e42\u0e04\u0e4a\u0e14\u0e2b\u0e19\u0e49\u0e32\u0e19\u0e35\u0e49');
         }
     });
     </script>
@@ -98,98 +98,110 @@ else:
     st.markdown("""
     <div class="fade-box">
         <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
-        <p>ยินดีต้อนรับ! คุณสามารถเลือกวันและดูแนวโน้มระดับน้ำได้เพื่อการเพาะปลูกที่แม่นยำ</p>
+        <p>ยินดีต้อน! คุณสามารถเลือกวันและดูแนวโน้มระดับน้ำได้เพื่อการเพาะปลูกที่แม่นยำ</p>
     </div>
     """, unsafe_allow_html=True)
 
-    file_path = r"BP2025_all_months_for_prophet.csv"
-
-    if not os.path.isfile(file_path):
-        st.error(f"❌ ไม่พบไฟล์: {file_path}")
-    else:
-        df = pd.read_csv(file_path)
-
-        date_col = next((c for c in ['ds', 'date', 'วันที่', 'Date', 'datetime'] if c in df.columns), None)
-        if not date_col:
-            st.error("❌ ไม่พบคอลัมน์วันที่ในไฟล์")
+    # 🔍 รวมข้อมูลจากหลายไฟล์
+    files = ['BP2025_all_months_for_prophet.csv', 'บางปะกง.csv', 'บางปะกง (3).csv']
+    dfs = []
+    for file in files:
+        if os.path.isfile(file):
+            try:
+                df_part = pd.read_csv(file)
+                dfs.append(df_part)
+            except Exception as e:
+                st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
         else:
-            df['ds'] = pd.to_datetime(df[date_col])
+            st.warning(f"❌ ไม่พบไฟล์: {file}")
 
-            if 'y' not in df.columns:
-                st.error("❌ ไม่พบคอลัมน์ 'y' (ค่าระดับน้ำ)")
+    if not dfs:
+        st.stop()
+
+    df = pd.concat(dfs, ignore_index=True)
+    date_col = next((c for c in ['ds', 'date', 'วันที่', 'Date', 'datetime'] if c in df.columns), None)
+    if not date_col:
+        st.error("❌ ไม่พบคอลัมน์วันที่ในไฟล์")
+        st.stop()
+
+    df['ds'] = pd.to_datetime(df[date_col], errors='coerce')
+    df = df.dropna(subset=['ds']).drop_duplicates(subset='ds').sort_values(by='ds').reset_index(drop=True)
+
+    if 'y' not in df.columns:
+        st.error("❌ ไม่พบคอลัมน์ 'y' (ค่าระดับน้ำ)")
+        st.stop()
+
+    menu = st.sidebar.selectbox("เลือกเมนู", ["เลือกวันและพยากรณ์", "สรุปผลการพยากรณ์"])
+
+    median_level = 2.82
+    high_threshold = 3.51
+    low_threshold = 1.90
+
+    if menu == "เลือกวันและพยากรณ์":
+        st.title("📅 พยากรณ์น้ำขึ้น-น้ำลงแบบเลือกวัน")
+        selected_date = st.date_input("เลือกวันที่ต้องการดู", value=pd.to_datetime("2025-01-01"))
+        selected_date = pd.to_datetime(selected_date)
+
+        df_today = df[df['ds'].dt.normalize() == selected_date]
+        if df_today.empty:
+            st.warning("❌ ไม่มีข้อมูลในวันนี้")
+        else:
+            st.dataframe(df_today)
+
+        st.subheader("🔮 พยากรณ์ล่วงหน้า")
+        periods = st.slider("พยากรณ์กี่ชั่วโมง?", 6, 168, 24)
+
+        df_past = df[df['ds'] <= selected_date]
+        if len(df_past) < 10:
+            st.warning("⚠️ ข้อมูลในอดีตไม่เพียงพอ")
+        else:
+            model = Prophet()
+            try:
+                with st.spinner("กำลังพยากรณ์..."):
+                    model.fit(df_past)
+                    future = model.make_future_dataframe(periods=periods, freq='H')
+                    forecast = model.predict(future)
+
+                st.session_state['forecast'] = forecast
+                st.session_state['periods'] = periods
+
+                st.subheader("📈 กราฟผลลัพธ์")
+                fig = model.plot(forecast)
+                ax = fig.gca()
+                ax.axhline(median_level, color='green', linestyle='--', label=f'ระดับน้ำปกติ ({median_level} ม.)')
+                ax.axhline(high_threshold, color='red', linestyle='--', label=f'🚨 น้ำขึ้นสูงเกิน (≥ {high_threshold} ม.)')
+                ax.axhline(low_threshold, color='blue', linestyle='--', label=f'⚠️ น้ำลดต่ำเกิน (≤ {low_threshold} ม.)')
+                ax.legend()
+                st.pyplot(fig)
+
+                st.subheader("📊 ตารางคาดการณ์ล่าสุด")
+                st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาด: {e}")
+
+    elif menu == "สรุปผลการพยากรณ์":
+        if 'forecast' in st.session_state:
+            forecast = st.session_state['forecast']
+            periods = st.session_state['periods']
+
+            if len(forecast) > periods:
+                delta = forecast.iloc[-1]['yhat'] - forecast.iloc[-periods]['yhat']
+                current_level = forecast.iloc[-1]['yhat']
+
+                if delta > 0:
+                    msg = f"🌊 คาดว่าน้ำจะขึ้น {delta:.2f} เมตร"
+                else:
+                    msg = f"⬇️ คาดว่าน้ำจะลด {abs(delta):.2f} เมตร"
+
+                if current_level >= high_threshold:
+                    msg += " (🚨 น้ำขึ้นสูงเกินค่าปกติ!)"
+                    st.error(msg)
+                elif current_level <= low_threshold:
+                    msg += " (⚠️ น้ำลดต่ำเกินค่าปกติ!)"
+                    st.warning(msg)
+                else:
+                    st.success(msg)
             else:
-                menu = st.sidebar.selectbox("เลือกเมนู", ["เลือกวันและพยากรณ์", "สรุปผลการพยากรณ์"])
-
-                # กำหนดค่ากลางและเกณฑ์แจ้งเตือน
-                median_level = 2.82
-                high_threshold = 3.51
-                low_threshold = 1.90
-
-                if menu == "เลือกวันและพยากรณ์":
-                    st.title("📅 พยากรณ์น้ำขึ้น-น้ำลงแบบเลือกวัน")
-                    selected_date = st.date_input("เลือกวันที่ต้องการดู", value=pd.to_datetime("2025-01-01"))
-                    selected_date = pd.to_datetime(selected_date)
-
-                    df_today = df[df['ds'].dt.normalize() == selected_date]
-                    if df_today.empty:
-                        st.warning("❌ ไม่มีข้อมูลในวันนี้")
-                    else:
-                        st.dataframe(df_today)
-
-                    st.subheader("🔮 พยากรณ์ล่วงหน้า")
-                    periods = st.slider("พยากรณ์กี่ชั่วโมง?", 6, 168, 24)
-
-                    df_past = df[df['ds'] <= selected_date]
-                    if len(df_past) < 10:
-                        st.warning("⚠️ ข้อมูลในอดีตไม่เพียงพอ")
-                    else:
-                        model = Prophet()
-                        try:
-                            with st.spinner("กำลังพยากรณ์..."):
-                                model.fit(df_past)
-                                future = model.make_future_dataframe(periods=periods, freq='H')
-                                forecast = model.predict(future)
-
-                            st.session_state['forecast'] = forecast
-                            st.session_state['periods'] = periods
-
-                            st.subheader("📈 กราฟผลลัพธ์")
-                            fig = model.plot(forecast)
-                            ax = fig.gca()
-                            ax.axhline(median_level, color='green', linestyle='--', label=f'ระดับน้ำปกติ ({median_level} ม.)')
-                            ax.axhline(high_threshold, color='red', linestyle='--', label=f'🚨 น้ำขึ้นสูงเกิน (≥ {high_threshold} ม.)')
-                            ax.axhline(low_threshold, color='blue', linestyle='--', label=f'⚠️ น้ำลดต่ำเกิน (≤ {low_threshold} ม.)')
-                            ax.legend()
-                            st.pyplot(fig)
-
-                            st.subheader("📊 ตารางคาดการณ์ล่าสุด")
-                            st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-                        except Exception as e:
-                            st.error(f"เกิดข้อผิดพลาด: {e}")
-
-                elif menu == "สรุปผลการพยากรณ์":
-                    if 'forecast' in st.session_state:
-                        forecast = st.session_state['forecast']
-                        periods = st.session_state['periods']
-
-                        if len(forecast) > periods:
-                            delta = forecast.iloc[-1]['yhat'] - forecast.iloc[-periods]['yhat']
-                            current_level = forecast.iloc[-1]['yhat']
-
-                            if delta > 0:
-                                msg = f"🌊 คาดว่าน้ำจะขึ้น {delta:.2f} เมตร"
-                            else:
-                                msg = f"⬇️ คาดว่าน้ำจะลด {abs(delta):.2f} เมตร"
-
-                            if current_level >= high_threshold:
-                                msg += " (🚨 น้ำขึ้นสูงเกินค่าปกติ!)"
-                                st.error(msg)
-                            elif current_level <= low_threshold:
-                                msg += " (⚠️ น้ำลดต่ำเกินค่าปกติ!)"
-                                st.warning(msg)
-                            else:
-                                st.success(msg)
-                        else:
-                            st.warning("⚠️ ข้อมูลไม่เพียงพอสำหรับการเปรียบเทียบ")
-                    else:
-                        st.warning("⚠️ กรุณาพยากรณ์ก่อนในเมนูแรก")
+                st.warning("⚠️ ข้อมูลไม่เพียงพอสำหรับการเปรียบเทียบ")
+        else:
+            st.warning("⚠️ กรุณาพยากรณ์ก่อนในเมนูแรก")

@@ -144,7 +144,7 @@ def fetch_tide_data():
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
-# แสดงหน้าเริ่มต้น ถ้ายังไม่เริ่มใช้งาน
+# หน้าเริ่มต้นถ้ายังไม่เริ่มใช้งาน
 if not st.session_state.app_started:
     st.markdown("""
     <div class="fade-box" style="text-align:center; margin-top:100px;">
@@ -155,11 +155,9 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        def rerun():
-            st.experimental_rerun()
-        rerun()
+        st.experimental_rerun()  # เรียกตรงนี้เลย ไม่ต้องซ้อนฟังก์ชัน
 
-# แสดงหน้าแอปหลัก ถ้าเริ่มใช้งานแล้ว
+# หน้าแอปหลักเมื่อเริ่มใช้งานแล้ว
 else:
     df, error = fetch_tide_data()
 

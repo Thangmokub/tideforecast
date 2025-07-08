@@ -90,8 +90,13 @@ st.markdown("""
 @st.cache_data(ttl=3600)
 def fetch_tide_data():
     url = "https://www.thailandtidetables.com/ไทย/ตารางน้ำขึ้นน้ำลง-ปากน้ำบางปะกง-ฉะเชิงเทรา-480.php"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/114.0.0.0 Safari/537.36"
+    }
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except Exception as e:
         return pd.DataFrame(), f"❌ ดึงข้อมูลไม่ได้: {e}"

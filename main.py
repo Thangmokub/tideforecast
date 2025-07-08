@@ -120,6 +120,11 @@ else:
             else:
                 menu = st.sidebar.selectbox("เลือกเมนู", ["เลือกวันและพยากรณ์", "สรุปผลการพยากรณ์"])
 
+                # กำหนดค่ากลางและเกณฑ์แจ้งเตือน
+                median_level = 2.82
+                high_threshold = 3.51
+                low_threshold = 1.90
+
                 if menu == "เลือกวันและพยากรณ์":
                     st.title("📅 พยากรณ์น้ำขึ้น-น้ำลงแบบเลือกวัน")
                     selected_date = st.date_input("เลือกวันที่ต้องการดู", value=pd.to_datetime("2025-01-01"))
@@ -148,17 +153,12 @@ else:
                             st.session_state['forecast'] = forecast
                             st.session_state['periods'] = periods
 
-                            # ค่ากลางระดับน้ำและเส้นแจ้งเตือน
-                            median_level = 2.82
-                            high_threshold = 3.51
-                            low_threshold = 1.90
-
                             st.subheader("📈 กราฟผลลัพธ์")
                             fig = model.plot(forecast)
                             ax = fig.gca()
-                            ax.axhline(median_level, color='green', linestyle='--', label='ระดับน้ำปกติ (2.82 ม.)')
-                            ax.axhline(high_threshold, color='red', linestyle='--', label='🚨 น้ำขึ้นสูงเกิน (≥ 3.51 ม.)')
-                            ax.axhline(low_threshold, color='blue', linestyle='--', label='⚠️ น้ำลดต่ำเกิน (≤ 1.90 ม.)')
+                            ax.axhline(median_level, color='green', linestyle='--', label=f'ระดับน้ำปกติ ({median_level} ม.)')
+                            ax.axhline(high_threshold, color='red', linestyle='--', label=f'🚨 น้ำขึ้นสูงเกิน (≥ {high_threshold} ม.)')
+                            ax.axhline(low_threshold, color='blue', linestyle='--', label=f'⚠️ น้ำลดต่ำเกิน (≤ {low_threshold} ม.)')
                             ax.legend()
                             st.pyplot(fig)
 
@@ -171,12 +171,24 @@ else:
                     if 'forecast' in st.session_state:
                         forecast = st.session_state['forecast']
                         periods = st.session_state['periods']
+
                         if len(forecast) > periods:
                             delta = forecast.iloc[-1]['yhat'] - forecast.iloc[-periods]['yhat']
+                            current_level = forecast.iloc[-1]['yhat']
+
                             if delta > 0:
-                                st.success(f"🌊 คาดว่าน้ำจะขึ้น {delta:.2f} เมตร")
+                                msg = f"🌊 คาดว่าน้ำจะขึ้น {delta:.2f} เมตร"
                             else:
-                                st.info(f"⬇️ คาดว่าน้ำจะลด {abs(delta):.2f} เมตร")
+                                msg = f"⬇️ คาดว่าน้ำจะลด {abs(delta):.2f} เมตร"
+
+                            if current_level >= high_threshold:
+                                msg += " (🚨 น้ำขึ้นสูงเกินค่าปกติ!)"
+                                st.error(msg)
+                            elif current_level <= low_threshold:
+                                msg += " (⚠️ น้ำลดต่ำเกินค่าปกติ!)"
+                                st.warning(msg)
+                            else:
+                                st.success(msg)
                         else:
                             st.warning("⚠️ ข้อมูลไม่เพียงพอสำหรับการเปรียบเทียบ")
                     else:

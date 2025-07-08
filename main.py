@@ -155,7 +155,7 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        st.experimental_rerun()  # เรียกตรงนี้เลย ไม่ต้องซ้อนฟังก์ชัน
+        # ไม่ต้องเรียก st.experimental_rerun()
 
 # หน้าแอปหลักเมื่อเริ่มใช้งานแล้ว
 else:

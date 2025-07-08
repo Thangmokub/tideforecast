@@ -9,7 +9,7 @@ import requests
 # ตั้งค่าหน้า
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
-# CSS + JS สำหรับหน้าตาและป้องกันคลิกขวา คัดลอก
+# CSS + JS สำหรับหน้าตาและป้องกันคลิกขวา คัดลอก (เหมือนเดิม)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
@@ -72,11 +72,9 @@ st.markdown("""
 
 @st.cache_data(ttl=3600)
 def fetch_tide_data():
-    url = "https://www.thailandtidetables.com/ไทย/ตารางน้ำขึ้นน้ำลง-ปากน้ำบางปะกง-ฉะเชิงเทรา-480.php"
+    url = "http://hydro.md.go.th/MD/Station?code=MD14"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/114.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0"
     }
     try:
         response = requests.get(url, headers=headers, timeout=10)
@@ -86,33 +84,43 @@ def fetch_tide_data():
 
     soup = BeautifulSoup(response.content, "html.parser")
 
-    table = soup.find("table", {"class": "table table-bordered table-hover"})
-    if not table:
-        return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
-
+    # ดึงวันที่จากตาราง td ที่ class ตามเว็บจริง
     date_cells = soup.select("td.text-center.bg-info.text-white")
     if len(date_cells) < 3:
         return pd.DataFrame(), "❌ ไม่พบวันที่จากเว็บไซต์"
 
     try:
-        day = int(date_cells[0].get_text(strip=True))
-        month = int(date_cells[1].get_text(strip=True))
-        year = int(date_cells[2].get_text(strip=True))
+        day_text = date_cells[0].get_text(strip=True)
+        month_text = date_cells[1].get_text(strip=True)
+        year_text = date_cells[2].get_text(strip=True)
+
+        if not day_text or not month_text or not year_text:
+            return pd.DataFrame(), "❌ วันที่จากเว็บไซต์ไม่สมบูรณ์"
+
+        day = int(day_text)
+        month = int(month_text)
+        year = int(year_text)
         if year > 2500:
             year -= 543
+
         base_date = datetime(year, month, day)
     except Exception as e:
         return pd.DataFrame(), f"❌ ไม่สามารถอ่านวันที่ได้: {e}"
 
+    # ดึงข้อมูลตารางระดับน้ำ (แก้ selector ตามโครงสร้างเว็บ)
+    table = soup.find("table", class_="table table-bordered table-hover")
+    if not table:
+        return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
+
     rows = table.find_all("tr")
     data = []
-
     for row in rows[1:]:
         cols = row.find_all("td")
         if len(cols) >= 2:
-            time_str = cols[0].text.strip()
-            level_str = cols[1].text.strip().replace("m", "").replace("เมตร", "")
+            time_str = cols[0].get_text(strip=True)
+            level_str = cols[1].get_text(strip=True)
             try:
+                # สมมติเวลารูปแบบ HH:mm หรือ H:mm
                 dt = datetime.strptime(time_str, "%H:%M")
                 full_dt = datetime.combine(base_date, dt.time())
                 level = float(level_str)

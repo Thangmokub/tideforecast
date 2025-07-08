@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from bs4 import BeautifulSoup
 import requests
-import re
 
 # ตั้งค่าหน้า
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
@@ -71,7 +70,6 @@ st.markdown("""
     </script>
 """, unsafe_allow_html=True)
 
-# ฟังก์ชันดึงข้อมูลน้ำขึ้นน้ำลงแบบเรียลไทม์
 @st.cache_data(ttl=3600)
 def fetch_tide_data():
     url = "https://www.thailandtidetables.com/ไทย/ตารางน้ำขึ้นน้ำลง-ปากน้ำบางปะกง-ฉะเชิงเทรา-480.php"
@@ -87,40 +85,29 @@ def fetch_tide_data():
         return pd.DataFrame(), f"❌ ดึงข้อมูลไม่ได้: {e}"
 
     soup = BeautifulSoup(response.content, "html.parser")
-
-    # หา tag วันที่ จาก class ที่กำหนด
-    date_text = soup.find(class_="text-center bg-info text-white")
-    if not date_text:
-        return pd.DataFrame(), "❌ ไม่พบวันที่จากเว็บไซต์"
-    text = date_text.get_text(strip=True)
-
-    match = re.search(r"(?:วันที่|ประจำวันที่)\s*(\d{1,2})\s*(\S+)\s*(\d{4})", text)
-    if not match:
-        return pd.DataFrame(), "❌ ไม่สามารถอ่านวันที่ได้"
-
-    day, month_th, year_str = match.groups()
-    year = int(year_str)
-    if year > 2500:  # แปลงปี พ.ศ. เป็น ค.ศ.
-        year -= 543
-
-    month_map = {
-        "มกราคม": 1, "กุมภาพันธ์": 2, "มีนาคม": 3, "เมษายน": 4,
-        "พฤษภาคม": 5, "มิถุนายน": 6, "กรกฎาคม": 7, "สิงหาคม": 8,
-        "กันยายน": 9, "ตุลาคม": 10, "พฤศจิกายน": 11, "ธันวาคม": 12
-    }
-    month = month_map.get(month_th)
-    if not month:
-        return pd.DataFrame(), f"❌ ไม่รู้จักเดือน: {month_th}"
-
-    try:
-        base_date = datetime(year, month, int(day))
-    except:
-        return pd.DataFrame(), "❌ วันที่ไม่ถูกต้อง"
-
-    # ดึงตารางน้ำขึ้นน้ำลง class ใหม่ที่เจอ
     table = soup.find("table", {"class": "table table-bordered table-hover"})
     if not table:
         return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
+
+    # หา <td class="text-center bg-info text-white"> เพื่อดึงวันที่
+    date_td = soup.find("td", class_="text-center bg-info text-white")
+    if not date_td:
+        return pd.DataFrame(), "❌ ไม่พบวันที่จากตาราง"
+
+    day_str = date_td.get_text(strip=True)
+    try:
+        day = int(day_str)
+    except:
+        return pd.DataFrame(), "❌ วันที่ไม่ถูกต้อง"
+
+    # กำหนดเดือนและปี (แก้ตามวันที่จริงหากต้องการ)
+    month = 7  # ตัวอย่าง: กรกฎาคม
+    year = 2023
+
+    try:
+        base_date = datetime(year, month, day)
+    except:
+        return pd.DataFrame(), "❌ วันที่ไม่ถูกต้อง"
 
     rows = table.find_all("tr")
     data = []
@@ -143,11 +130,9 @@ def fetch_tide_data():
     df = pd.DataFrame(data)
     return df, None
 
-# เริ่มต้นตัวแปร session_state
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
-# หน้าเริ่มต้นถ้ายังไม่เริ่มใช้งาน
 if not st.session_state.app_started:
     st.markdown("""
     <div class="fade-box" style="text-align:center; margin-top:100px;">
@@ -158,9 +143,8 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        st.experimental_rerun()  # เรียกตรงนี้เลย
+        st.experimental_rerun()
 
-# หน้าแอปหลักเมื่อเริ่มใช้งานแล้ว
 else:
     df, error = fetch_tide_data()
 

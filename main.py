@@ -4,85 +4,51 @@ import pandas as pd
 from prophet import Prophet
 import matplotlib.pyplot as plt
 import os
+from datetime import datetime
 
-# ตั้งค่าเพจ
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
-# สร้างสถานะเริ่มต้น
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
-# CSS + JS (แก้ encoding โดยใช้ raw string)
+# CSS + JS
 st.markdown(r"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
-
     html, body, .stApp {
         background-color: #f1f8e9;
         font-family: 'Kanit', sans-serif;
         color: #1b5e20;
-        transition: all 0.3s ease-in-out;
     }
-
     .block-container { padding-top: 2rem; }
-
-    h1, h2, h3, h4 {
-        color: #2e7d32;
-        animation: fadeIn 1s ease-out;
-    }
-
     .fade-box {
         background: linear-gradient(to right, #dcedc8, #f0f4c3);
         border-left: 8px solid #81c784;
         border-radius: 12px;
         padding: 20px;
         margin-bottom: 20px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        animation: fadeInUp 1s ease-out;
     }
-
     .stButton>button {
         background-color: #66bb6a;
         color: white;
         border-radius: 8px;
         padding: 0.5em 1.5em;
         font-size: 18px;
-        transition: all 0.3s ease-in-out;
     }
-
     .stButton>button:hover {
         background-color: #388e3c;
         transform: scale(1.03);
     }
-
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
-    @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
     </style>
-
     <script>
-    document.addEventListener('contextmenu', function(event) {
-        event.preventDefault();
+    document.addEventListener('contextmenu', e => {
+        e.preventDefault();
         alert('ไม่สามารถคลิกขวาได้บนเว็บไซต์นี้');
-    });
-    document.addEventListener('keydown', function (event) {
-        if ((event.ctrlKey && event.key.toLowerCase() === 'c') ||
-            (event.ctrlKey && event.key.toLowerCase() === 'u') ||
-            event.key === 'F12') {
-            event.preventDefault();
-            alert('ห้ามคัดลอกหรือดูซอร์สโค้ดหน้านี้');
-        }
     });
     </script>
 """, unsafe_allow_html=True)
 
-# หน้าเริ่มต้น
+# ส่วนต้อนรับ
 if not st.session_state.app_started:
     st.markdown("""
     <div class="fade-box" style="text-align:center; margin-top:100px;">
@@ -95,7 +61,9 @@ if not st.session_state.app_started:
         st.session_state.app_started = True
         st.rerun()
 
-# หน้าแอปหลัก
+# ========================
+# ส่วนหลักของแอป
+# ========================
 else:
     st.markdown("""
     <div class="fade-box">
@@ -104,41 +72,48 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-    # 🔍 รวมข้อมูลจากหลายไฟล์
+    def load_and_clean_csv(file):
+        try:
+            df = pd.read_csv(file, encoding='utf-8')
+
+            if 'ds' in df.columns and 'y' in df.columns:
+                df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
+                df['y'] = pd.to_numeric(df['y'], errors='coerce')
+                return df.dropna(subset=['ds', 'y'])
+
+            elif set(['วันที่', 'เวลา', 'ระดับน้ำ']).issubset(df.columns):
+                # แปลงรูปแบบวันที่ (พ.ศ. → ค.ศ.)
+                def convert(row):
+                    try:
+                        d, m, y = map(int, str(row['วันที่']).split("/"))
+                        y -= 543
+                        return datetime(y, m, d, *map(int, str(row['เวลา']).split(":")))
+                    except:
+                        return pd.NaT
+                df['ds'] = df.apply(convert, axis=1)
+                df['y'] = pd.to_numeric(df['ระดับน้ำ'], errors='coerce')
+                return df[['ds', 'y']].dropna()
+            else:
+                return pd.DataFrame()
+        except Exception as e:
+            st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
+            return pd.DataFrame()
+
+    # 🔄 โหลดและรวมข้อมูล
     files = ['บางปะกง.csv', 'บางปะกง (3).csv']
-    dfs = []
-    for file in files:
-        if os.path.isfile(file):
-            try:
-                df_part = pd.read_csv(file)
-                dfs.append(df_part)
-            except Exception as e:
-                st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
-        else:
-            st.warning(f"❌ ไม่พบไฟล์: {file}")
+    dfs = [load_and_clean_csv(f) for f in files if os.path.isfile(f)]
+    df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
 
-    if not dfs:
+    if df.empty:
+        st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")
         st.stop()
 
-    df = pd.concat(dfs, ignore_index=True)
-    date_col = next((c for c in ['ds', 'date', 'วันที่', 'Date', 'datetime'] if c in df.columns), None)
-    if not date_col:
-        st.error("❌ ไม่พบคอลัมน์วันที่ในไฟล์")
-        st.stop()
-
-    df['ds'] = pd.to_datetime(df[date_col], errors='coerce')
-    df = df.dropna(subset=['ds']).drop_duplicates(subset='ds').sort_values(by='ds').reset_index(drop=True)
-
-    if 'y' not in df.columns:
-        st.error("❌ ไม่พบคอลัมน์ 'y' (ค่าระดับน้ำ)")
-        st.stop()
-
-    menu = st.sidebar.selectbox("เลือกเมนู", ["เลือกวันและพยากรณ์", "สรุปผลการพยากรณ์"])
-
-    # ค่าระดับน้ำอ้างอิง
+    # ค่าอ้างอิงระดับน้ำ
     median_level = 2.82
     high_threshold = 3.51
     low_threshold = 1.90
+
+    menu = st.sidebar.selectbox("เลือกเมนู", ["เลือกวันและพยากรณ์", "สรุปผลการพยากรณ์"])
 
     if menu == "เลือกวันและพยากรณ์":
         st.title("📅 พยากรณ์น้ำขึ้น-น้ำลงแบบเลือกวัน")

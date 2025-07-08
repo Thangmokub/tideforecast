@@ -85,32 +85,28 @@ def fetch_tide_data():
         return pd.DataFrame(), f"❌ ดึงข้อมูลไม่ได้: {e}"
 
     soup = BeautifulSoup(response.content, "html.parser")
+
     table = soup.find("table", {"class": "table table-bordered table-hover"})
     if not table:
         return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
 
-    # หา <td class="text-center bg-info text-white"> เพื่อดึงวันที่
-    date_td = soup.find("td", class_="text-center bg-info text-white")
-    if not date_td:
-        return pd.DataFrame(), "❌ ไม่พบวันที่จากตาราง"
-
-    day_str = date_td.get_text(strip=True)
-    try:
-        day = int(day_str)
-    except:
-        return pd.DataFrame(), "❌ วันที่ไม่ถูกต้อง"
-
-    # กำหนดเดือนและปี (แก้ตามวันที่จริงหากต้องการ)
-    month = 7  # ตัวอย่าง: กรกฎาคม
-    year = 2023
+    date_cells = soup.select("td.text-center.bg-info.text-white")
+    if len(date_cells) < 3:
+        return pd.DataFrame(), "❌ ไม่พบวันที่จากเว็บไซต์"
 
     try:
+        day = int(date_cells[0].get_text(strip=True))
+        month = int(date_cells[1].get_text(strip=True))
+        year = int(date_cells[2].get_text(strip=True))
+        if year > 2500:
+            year -= 543
         base_date = datetime(year, month, day)
-    except:
-        return pd.DataFrame(), "❌ วันที่ไม่ถูกต้อง"
+    except Exception as e:
+        return pd.DataFrame(), f"❌ ไม่สามารถอ่านวันที่ได้: {e}"
 
     rows = table.find_all("tr")
     data = []
+
     for row in rows[1:]:
         cols = row.find_all("td")
         if len(cols) >= 2:

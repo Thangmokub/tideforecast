@@ -12,8 +12,8 @@ st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้�
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
-# CSS + JS
-st.markdown("""
+# CSS + JS (แก้ encoding โดยใช้ raw string)
+st.markdown(r"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
 
@@ -65,17 +65,18 @@ st.markdown("""
         to { opacity: 1; transform: translateY(0); }
     }
     </style>
+
     <script>
     document.addEventListener('contextmenu', function(event) {
         event.preventDefault();
-        alert('\u274c \u0e44\u0e21\u0e48\u0e2a\u0e32\u0e21\u0e32\u0e23\u0e16\u0e04\u0e25\u0e34\u0e01\u0e02\u0e27\u0e32\u0e44\u0e14\u0e49\u0e1a\u0e19\u0e40\u0e27\u0e47\u0e1a\u0e44\u0e0b\u0e15\u0e4c\u0e19\u0e35\u0e49');
+        alert('ไม่สามารถคลิกขวาได้บนเว็บไซต์นี้');
     });
     document.addEventListener('keydown', function (event) {
         if ((event.ctrlKey && event.key.toLowerCase() === 'c') ||
             (event.ctrlKey && event.key.toLowerCase() === 'u') ||
             event.key === 'F12') {
             event.preventDefault();
-            alert('\ud83d\udd12 \u0e2b\u0e49\u0e32\u0e21\u0e04\u0e31\u0e14\u0e25\u0e2d\u0e01\u0e2b\u0e23\u0e37\u0e2d\u0e14\u0e39\u0e0b\u0e2d\u0e23\u0e4c\u0e2a\u0e42\u0e04\u0e4a\u0e14\u0e2b\u0e19\u0e49\u0e32\u0e19\u0e35\u0e49');
+            alert('ห้ามคัดลอกหรือดูซอร์สโค้ดหน้านี้');
         }
     });
     </script>
@@ -99,7 +100,7 @@ else:
     st.markdown("""
     <div class="fade-box">
         <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
-        <p>ยินดีต้อน! คุณสามารถเลือกวันและดูแนวโน้มระดับน้ำได้เพื่อการเพาะปลูกที่แม่นยำ</p>
+        <p>ยินดีต้อนรับ! คุณสามารถเลือกวันและดูแนวโน้มระดับน้ำได้เพื่อการเพาะปลูกที่แม่นยำ</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -134,6 +135,7 @@ else:
 
     menu = st.sidebar.selectbox("เลือกเมนู", ["เลือกวันและพยากรณ์", "สรุปผลการพยากรณ์"])
 
+    # ค่าระดับน้ำอ้างอิง
     median_level = 2.82
     high_threshold = 3.51
     low_threshold = 1.90

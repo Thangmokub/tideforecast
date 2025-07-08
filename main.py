@@ -68,7 +68,7 @@ else:
     st.markdown("""
     <div class="fade-box">
         <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
-        <p>ยินดีต้อนรับ! คุณสามารถเลือกวันและดูแนวโน้มระดับน้ำได้เพื่อการเพาะปลูกที่แม่นยำ</p>
+        <p>ยินดีต้อน! คุณสามารถเลือกวันและดูแนวโน้มระดับน้ำได้เพื่อการเพาะปลูกที่แม่นยำ</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -76,30 +76,34 @@ else:
         try:
             df = pd.read_csv(file, encoding='utf-8')
 
-            if 'ds' in df.columns and 'y' in df.columns:
-                df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
-                df['y'] = pd.to_numeric(df['y'], errors='coerce')
-                return df.dropna(subset=['ds', 'y'])
-
-            elif set(['วันที่', 'เวลา', 'ระดับน้ำ']).issubset(df.columns):
-                # แปลงรูปแบบวันที่ (พ.ศ. → ค.ศ.)
+            if {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
                 def convert(row):
                     try:
-                        d, m, y = map(int, str(row['วันที่']).split("/"))
-                        y -= 543
-                        return datetime(y, m, d, *map(int, str(row['เวลา']).split(":")))
+                        d, m, y_th = map(int, str(row['วันที่']).split("/"))
+                        y_ad = y_th - 543
+                        h, mi, s = map(int, str(row['เวลา']).split(":"))
+                        return datetime(y_ad, m, d, h, mi, s)
                     except:
                         return pd.NaT
+
                 df['ds'] = df.apply(convert, axis=1)
                 df['y'] = pd.to_numeric(df['ระดับน้ำ'], errors='coerce')
                 return df[['ds', 'y']].dropna()
-            else:
-                return pd.DataFrame()
+
+            elif {'ds', 'y'}.issubset(df.columns):
+                df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
+                df['y'] = pd.to_numeric(df['y'], errors='coerce')
+                return df[['ds', 'y']].dropna()
+
+            elif df.shape[1] >= 3:
+                df.columns = ['วันที่', 'เวลา', 'ระดับน้ำ']
+                return load_and_clean_csv(file)
+
+            return pd.DataFrame()
         except Exception as e:
             st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
             return pd.DataFrame()
 
-    # 🔄 โหลดและรวมข้อมูล
     files = ['บางปะกง.csv', 'บางปะกง (3).csv']
     dfs = [load_and_clean_csv(f) for f in files if os.path.isfile(f)]
     df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
@@ -108,7 +112,6 @@ else:
         st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")
         st.stop()
 
-    # ค่าอ้างอิงระดับน้ำ
     median_level = 2.82
     high_threshold = 3.51
     low_threshold = 1.90

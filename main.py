@@ -105,7 +105,7 @@ else:
     """, unsafe_allow_html=True)
 
     # 🔍 รวมข้อมูลจากหลายไฟล์
-    files = ['BP2025_all_months_for_prophet.csv', 'บางปะกง.csv', 'บางปะกง (3).csv']
+    files = ['บางปะกง.csv', 'บางปะกง (3).csv']
     dfs = []
     for file in files:
         if os.path.isfile(file):

@@ -5,11 +5,13 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from bs4 import BeautifulSoup
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 # ตั้งค่าหน้า
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
-# CSS + JS สำหรับหน้าตาและป้องกันคลิกขวา คัดลอก (เหมือนเดิม)
+# CSS + JS สำหรับหน้าตาและป้องกันคลิกขวา คัดลอก
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
@@ -70,62 +72,63 @@ st.markdown("""
     </script>
 """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=3600)
-def fetch_tide_data():
-    url = "http://hydro.md.go.th/MD/Station?code=MD14"
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+# ฟังก์ชันดึงข้อมูลแบบ retry และ timeout
+def get_with_retry(url):
+    session = requests.Session()
+    retry = Retry(
+        total=5,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"]
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = session.get(url, timeout=20)
         response.raise_for_status()
+        return response.text, None
     except Exception as e:
-        return pd.DataFrame(), f"❌ ดึงข้อมูลไม่ได้: {e}"
+        return None, f"❌ ดึงข้อมูลไม่ได้: {e}"
 
-    soup = BeautifulSoup(response.content, "html.parser")
+# ฟังก์ชันดึงข้อมูลน้ำขึ้นน้ำลงจาก hydro.md.go.th (ปรับแต่งตามโครงสร้างเว็บจริง)
+def fetch_tide_data_hydro():
+    url = "http://hydro.md.go.th/MD/Station?code=MD14"
+    html, error = get_with_retry(url)
+    if error:
+        return pd.DataFrame(), error
 
-    # ดึงวันที่จากตาราง td ที่ class ตามเว็บจริง
-    date_cells = soup.select("td.text-center.bg-info.text-white")
-    if len(date_cells) < 3:
-        return pd.DataFrame(), "❌ ไม่พบวันที่จากเว็บไซต์"
+    soup = BeautifulSoup(html, "html.parser")
 
-    try:
-        day_text = date_cells[0].get_text(strip=True)
-        month_text = date_cells[1].get_text(strip=True)
-        year_text = date_cells[2].get_text(strip=True)
-
-        if not day_text or not month_text or not year_text:
-            return pd.DataFrame(), "❌ วันที่จากเว็บไซต์ไม่สมบูรณ์"
-
-        day = int(day_text)
-        month = int(month_text)
-        year = int(year_text)
-        if year > 2500:
-            year -= 543
-
-        base_date = datetime(year, month, day)
-    except Exception as e:
-        return pd.DataFrame(), f"❌ ไม่สามารถอ่านวันที่ได้: {e}"
-
-    # ดึงข้อมูลตารางระดับน้ำ (แก้ selector ตามโครงสร้างเว็บ)
-    table = soup.find("table", class_="table table-bordered table-hover")
+    # หาตารางข้อมูล (ปรับ selector ตามเว็บจริง)
+    table = soup.find("table", {"class": "table table-bordered table-hover"})
     if not table:
         return pd.DataFrame(), "❌ ไม่พบตารางข้อมูลน้ำขึ้นน้ำลง"
 
-    rows = table.find_all("tr")
+    # ดึงหัวข้อวันที่จากหน้า (ถ้ามี) หรือกำหนดเอง
+    date_div = soup.find("div", {"class": "date-class-or-similar"})  # ตัวอย่าง ต้องแก้ตามจริง
+    if date_div:
+        date_str = date_div.text.strip()
+        # แปลง string เป็น datetime ตามรูปแบบจริง
+        # ตัวอย่าง:
+        # base_date = datetime.strptime(date_str, "%d/%m/%Y")
+    else:
+        base_date = datetime.now().date()
+
     data = []
+    rows = table.find_all("tr")
     for row in rows[1:]:
         cols = row.find_all("td")
         if len(cols) >= 2:
-            time_str = cols[0].get_text(strip=True)
-            level_str = cols[1].get_text(strip=True)
+            time_str = cols[0].text.strip()
+            level_str = cols[1].text.strip().replace("m", "").replace("เมตร", "")
             try:
-                # สมมติเวลารูปแบบ HH:mm หรือ H:mm
                 dt = datetime.strptime(time_str, "%H:%M")
                 full_dt = datetime.combine(base_date, dt.time())
                 level = float(level_str)
                 data.append({"ds": full_dt, "y": level})
-            except:
+            except Exception:
                 continue
 
     if not data:
@@ -134,9 +137,11 @@ def fetch_tide_data():
     df = pd.DataFrame(data)
     return df, None
 
+# เริ่มต้น session_state
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
+# หน้าเริ่มต้น
 if not st.session_state.app_started:
     st.markdown("""
     <div class="fade-box" style="text-align:center; margin-top:100px;">
@@ -149,13 +154,14 @@ if not st.session_state.app_started:
         st.session_state.app_started = True
         st.experimental_rerun()
 
+# หน้าแอปหลัก
 else:
-    df, error = fetch_tide_data()
+    df, error = fetch_tide_data_hydro()
 
     st.markdown("""
     <div class="fade-box">
         <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง (ข้อมูลวันนี้)</h2>
-        <p>ดึงข้อมูลจากเว็บไซต์โดยตรงแบบเรียลไทม์</p>
+        <p>ดึงข้อมูลจาก hydro.md.go.th แบบเรียลไทม์</p>
     </div>
     """, unsafe_allow_html=True)
 

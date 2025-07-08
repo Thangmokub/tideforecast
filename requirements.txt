@@ -1,6 +1,6 @@
 streamlit
 pandas
 matplotlib
-prophet==1.1.5
-cmdstanpy==1.1.0
-numpy==1.23.5
+prophet
+beautifulsoup4
+requests

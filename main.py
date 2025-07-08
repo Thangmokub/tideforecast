@@ -86,6 +86,11 @@ if uploaded_files:
     for file in uploaded_files:
         try:
             df_temp = pd.read_csv(file, sep="\t")
+
+            if 'ds' not in df_temp.columns or 'y' not in df_temp.columns:
+                st.error(f"❌ ไฟล์ {file.name} ไม่มีคอลัมน์ 'ds' หรือ 'y'")
+                continue
+
             df_temp['ds'] = pd.to_datetime(df_temp['ds'], errors='coerce')
             df_temp['y'] = pd.to_numeric(df_temp['y'], errors='coerce')
             df_temp.dropna(inplace=True)
@@ -101,7 +106,13 @@ if error:
     st.warning(error)
 
 df_combined = pd.concat([df_web, df_file_all], ignore_index=True).dropna()
-df_combined.sort_values("ds", inplace=True)
+
+# ตรวจสอบว่ามีคอลัมน์ 'ds' ก่อนเรียงลำดับ
+if 'ds' in df_combined.columns:
+    df_combined.sort_values("ds", inplace=True)
+else:
+    st.error("❌ ไม่พบคอลัมน์ 'ds' ในข้อมูลรวม กรุณาตรวจสอบข้อมูลจากเว็บไซต์หรือไฟล์ที่อัปโหลด")
+    st.stop()
 
 if df_combined.empty:
     st.warning("⚠️ ไม่มีข้อมูลเพียงพอจากเว็บหรือไฟล์")

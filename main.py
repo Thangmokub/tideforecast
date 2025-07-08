@@ -2,34 +2,61 @@ import streamlit as st
 import pandas as pd
 from prophet import Prophet
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
+import re
+import matplotlib.dates as mdates
 
 # -------------------------------
-# ฟังก์ชันดึงข้อมูลจากเว็บไซต์
+# ดึงข้อมูลจากเว็บไซต์
 # -------------------------------
 @st.cache_data(ttl=3600)
 def fetch_tide_data():
     url = "https://www.thailandtidetables.com/ไทย/ตารางน้ำขึ้นน้ำลง-ปากน้ำบางปะกง-ฉะเชิงเทรา-480.php"
-    response = requests.get(url)
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+    except Exception as e:
+        return pd.DataFrame(), f"❌ ดึงข้อมูลไม่ได้: {e}"
+
     soup = BeautifulSoup(response.content, "html.parser")
     table = soup.find("table", {"class": "tide-table"})
 
-    if not table:
-        return pd.DataFrame(), "❌ ไม่พบตารางในเว็บไซต์"
+    date_text = soup.find("h2") or soup.find("caption") or soup.find("strong")
+    if not date_text:
+        return pd.DataFrame(), "❌ ไม่พบวันที่จากเว็บไซต์"
+
+    text = date_text.get_text()
+    match = re.search(r"วันที่\s*(\d{1,2})\s*(\S+)\s*(\d{4})", text)
+    if not match:
+        return pd.DataFrame(), "❌ ไม่สามารถอ่านวันที่ได้"
+
+    day, month_th, year = match.groups()
+    month_map = {
+        "มกราคม": 1, "กุมภาพันธ์": 2, "มีนาคม": 3, "เมษายน": 4,
+        "พฤษภาคม": 5, "มิถุนายน": 6, "กรกฎาคม": 7, "สิงหาคม": 8,
+        "กันยายน": 9, "ตุลาคม": 10, "พฤศจิกายน": 11, "ธันวาคม": 12
+    }
+    month = month_map.get(month_th)
+    if not month:
+        return pd.DataFrame(), f"❌ ไม่รู้จักเดือน: {month_th}"
+
+    try:
+        base_date = datetime(int(year), month, int(day))
+    except:
+        return pd.DataFrame(), "❌ วันที่ไม่ถูกต้อง"
 
     rows = table.find_all("tr")
     data = []
-
     for row in rows[1:]:
         cols = row.find_all("td")
         if len(cols) >= 2:
             time_str = cols[0].text.strip()
-            level_str = cols[1].text.strip().replace("m", "")
+            level_str = cols[1].text.strip().replace("m", "").replace("เมตร", "")
             try:
                 dt = datetime.strptime(time_str, "%H:%M")
-                full_dt = datetime.combine(datetime.today(), dt.time())
+                full_dt = datetime.combine(base_date, dt.time())
                 level = float(level_str)
                 data.append({"ds": full_dt, "y": level})
             except:
@@ -42,124 +69,100 @@ def fetch_tide_data():
     return df, None
 
 # -------------------------------
-# เริ่มต้น Streamlit App
+# เริ่มต้นแอป Streamlit
 # -------------------------------
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
+st.title("🌊 พยากรณ์น้ำขึ้นน้ำลง (รวมข้อมูลจากเว็บ + ไฟล์ที่อัปโหลด)")
 
-if 'app_started' not in st.session_state:
-    st.session_state.app_started = False
+# โหลดจากเว็บไซต์
+with st.spinner("🌐 โหลดข้อมูลจากเว็บไซต์..."):
+    df_web, error = fetch_tide_data()
 
-# CSS/JS Styling
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
-    html, body, .stApp {
-        background-color: #f1f8e9;
-        font-family: 'Kanit', sans-serif;
-        color: #1b5e20;
-    }
-    .block-container { padding-top: 2rem; }
-    .fade-box {
-        background: linear-gradient(to right, #dcedc8, #f0f4c3);
-        border-left: 8px solid #81c784;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-    .stButton>button {
-        background-color: #66bb6a;
-        color: white;
-        border-radius: 8px;
-        font-size: 18px;
-    }
-    .stButton>button:hover {
-        background-color: #388e3c;
-        transform: scale(1.03);
-    }
-    </style>
-""", unsafe_allow_html=True)
+# อัปโหลดไฟล์
+uploaded_files = st.file_uploader("📂 อัปโหลดไฟล์ .tsv (หลายไฟล์ได้)", type="tsv", accept_multiple_files=True)
 
-# หน้าเริ่มต้น
-if not st.session_state.app_started:
-    st.markdown("""
-    <div class="fade-box" style="text-align:center; margin-top:100px;">
-        <h1>👩‍🌾 ยินดีต้อนรับสู่ระบบพยากรณ์น้ำขึ้นน้ำลงเพื่อการเกษตร</h1>
-        <p style="font-size:20px;">กดปุ่มด้านล่างเพื่อเข้าสู่แอป</p>
-    </div>
-    """, unsafe_allow_html=True)
+df_files = []
+if uploaded_files:
+    for file in uploaded_files:
+        try:
+            df_temp = pd.read_csv(file, sep="\t")
+            df_temp['ds'] = pd.to_datetime(df_temp['ds'], errors='coerce')
+            df_temp['y'] = pd.to_numeric(df_temp['y'], errors='coerce')
+            df_temp.dropna(inplace=True)
+            df_files.append(df_temp)
+            st.success(f"✅ โหลดไฟล์: {file.name}")
+        except Exception as e:
+            st.error(f"❌ โหลดไม่ได้: {file.name} | {e}")
 
-    if st.button("เริ่มใช้งาน"):
-        st.session_state.app_started = True
-        st.rerun()
+df_file_all = pd.concat(df_files, ignore_index=True) if df_files else pd.DataFrame()
 
-# -------------------------------
-# หน้าแอปหลัก
-# -------------------------------
+# รวมข้อมูลทั้งหมด
+if error:
+    st.warning(error)
+
+df_combined = pd.concat([df_web, df_file_all], ignore_index=True).dropna()
+df_combined.sort_values("ds", inplace=True)
+
+if df_combined.empty:
+    st.warning("⚠️ ไม่มีข้อมูลเพียงพอจากเว็บหรือไฟล์")
 else:
-    st.markdown("""
-    <div class="fade-box">
-        <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
-        <p>แสดงข้อมูลจากปากน้ำบางปะกงแบบเรียลไทม์</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.subheader("📋 ข้อมูลรวมทั้งหมด")
+    st.dataframe(df_combined)
 
-    df, error = fetch_tide_data()
+    st.subheader("🔮 พยากรณ์น้ำขึ้นน้ำลง")
+    periods = st.slider("พยากรณ์ล่วงหน้ากี่ชั่วโมง?", 6, 72, 24)
 
-    if error:
-        st.error(error)
-    elif df.empty:
-        st.warning("ไม่พบข้อมูล")
+    df_past = df_combined[df_combined['ds'] <= datetime.now()]
+    if len(df_past) < 10:
+        st.warning("⚠️ ข้อมูลย้อนหลังไม่เพียงพอ")
     else:
-        df['ds'] = pd.to_datetime(df['ds'])
+        model = Prophet()
+        with st.spinner("📈 กำลังวิเคราะห์..."):
+            model.fit(df_past)
+            future = model.make_future_dataframe(periods=periods, freq='H')
+            forecast = model.predict(future)
 
-        menu = st.sidebar.selectbox("เลือกเมนู", ["เลือกวันและพยากรณ์", "สรุปผลการพยากรณ์"])
+        st.subheader("📈 กราฟการพยากรณ์")
 
-        if menu == "เลือกวันและพยากรณ์":
-            st.title("📅 พยากรณ์น้ำขึ้น-น้ำลงแบบเรียลไทม์")
+        # --- ค่าระดับ ---
+        mean_level = 2.82
+        high_level = 3.51
+        low_level = 1.90
 
-            selected_date = st.date_input("เลือกวันที่", value=datetime.today())
-            selected_date = pd.to_datetime(selected_date)
+        # กราฟ
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(forecast['ds'], forecast['yhat'], color='skyblue', label="แนวโน้ม")
+        ax.fill_between(forecast['ds'], forecast['yhat_lower'], forecast['yhat_upper'], alpha=0.2)
 
-            df_today = df[df['ds'].dt.date == selected_date.date()]
-            if df_today.empty:
-                st.warning("❌ ไม่มีข้อมูลของวันนี้")
-            else:
-                st.dataframe(df_today)
+        # จุดเตือน
+        high_points = forecast[forecast['yhat'] >= high_level]
+        low_points = forecast[forecast['yhat'] <= low_level]
+        ax.scatter(high_points['ds'], high_points['yhat'], color='red', label="🌊 น้ำขึ้นสูง")
+        ax.scatter(low_points['ds'], low_points['yhat'], color='orange', label="⬇️ น้ำลงต่ำ")
 
-            st.subheader("🔮 พยากรณ์ล่วงหน้า")
-            periods = st.slider("พยากรณ์กี่ชั่วโมง?", 6, 72, 24)
+        # เส้นระดับ
+        ax.axhline(mean_level, color='green', linestyle='--', label="ระดับปกติ (2.82 ม.)")
+        ax.axhline(high_level, color='red', linestyle='--', label="⚠️ ≥ 3.51 ม.")
+        ax.axhline(low_level, color='orange', linestyle='--', label="⚠️ ≤ 1.90 ม.")
 
-            df_past = df[df['ds'] <= datetime.now()]
-            if len(df_past) < 10:
-                st.warning("⚠️ ข้อมูลไม่เพียงพอ")
-            else:
-                model = Prophet()
-                with st.spinner("กำลังพยากรณ์..."):
-                    model.fit(df_past)
-                    future = model.make_future_dataframe(periods=periods, freq='H')
-                    forecast = model.predict(future)
+        # แกนและตกแต่ง
+        ax.set_title("📈 การพยากรณ์ระดับน้ำ")
+        ax.set_ylabel("ระดับน้ำ (เมตร)")
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b %H:%M'))
+        ax.tick_params(axis='x', rotation=30)
+        ax.legend()
+        st.pyplot(fig)
 
-                st.session_state['forecast'] = forecast
-                st.session_state['periods'] = periods
+        st.subheader("📊 ตารางผลการพยากรณ์ล่าสุด")
+        st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
 
-                st.subheader("📈 กราฟผลลัพธ์")
-                fig = model.plot(forecast)
-                st.pyplot(fig)
+        # แจ้งเตือน
+        max_level = forecast['yhat'].max()
+        min_level = forecast['yhat'].min()
 
-                st.subheader("📊 ตารางคาดการณ์ล่าสุด")
-                st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-
-        elif menu == "สรุปผลการพยากรณ์":
-            if 'forecast' in st.session_state:
-                forecast = st.session_state['forecast']
-                periods = st.session_state['periods']
-                if len(forecast) > periods:
-                    delta = forecast.iloc[-1]['yhat'] - forecast.iloc[-periods]['yhat']
-                    if delta > 0:
-                        st.success(f"🌊 คาดว่าน้ำจะขึ้น {delta:.2f} เมตร")
-                    else:
-                        st.info(f"⬇️ คาดว่าน้ำจะลด {abs(delta):.2f} เมตร")
-                else:
-                    st.warning("⚠️ ข้อมูลไม่เพียงพอสำหรับเปรียบเทียบ")
-            else:
-                st.warning("⚠️ กรุณาพยากรณ์ก่อนในเมนูแรก")
+        if max_level >= high_level:
+            st.error(f"🌊 แจ้งเตือน: น้ำจะขึ้นสูงสุดที่ {max_level:.2f} เมตร")
+        if min_level <= low_level:
+            st.warning(f"⬇️ แจ้งเตือน: น้ำจะลดต่ำสุดที่ {min_level:.2f} เมตร")
+        if low_level < min_level < high_level and max_level < high_level:
+            st.success("✅ ระดับน้ำคาดว่าอยู่ในช่วงปกติ")

@@ -6,31 +6,10 @@ import matplotlib.pyplot as plt
 import os
 from datetime import datetime
 
-# ไลบรารีสำหรับ Google Sheets
-import gspread
-from google.oauth2.service_account import Credentials
-
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
-
-# ใส่ path ไฟล์ JSON Service Account ของคุณ
-GSHEET_JSON_PATH = "your-service-account.json"  # <-- แก้เป็นไฟล์จริงของคุณ
-GSHEET_SPREADSHEET_NAME = "ชื่อสเปรดชีตคุณ"  # <-- แก้เป็นชื่อสเปรดชีตใน Google Sheets ที่ต้องการบันทึก
-
-# ฟังก์ชันเชื่อม Google Sheets
-def connect_to_gsheet():
-    try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets',
-                  'https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_file(GSHEET_JSON_PATH, scopes=scopes)
-        client = gspread.authorize(creds)
-        sheet = client.open(GSHEET_SPREADSHEET_NAME).sheet1
-        return sheet
-    except Exception as e:
-        st.error(f"❌ เชื่อมต่อ Google Sheets ไม่ได้: {e}")
-        return None
 
 # CSS + JS + fade-in animation
 st.markdown(r"""
@@ -220,7 +199,7 @@ else:
 
         df_summary = pd.DataFrame(rows)
 
-        # แสดงตาราง
+        # สร้าง HTML ตาราง
         table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th></tr>"
         for _, row in df_summary.iterrows():
             table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td></tr>"
@@ -228,22 +207,5 @@ else:
 
         st.markdown("🗓️ **แนวโน้มรายวันของเดือน**", unsafe_allow_html=True)
         st.markdown(table_html, unsafe_allow_html=True)
-
-        # ปุ่มบันทึกลง Google Sheets
-        if st.button("บันทึกข้อมูลรายวันลง Google Sheets"):
-            sheet = connect_to_gsheet()
-            if sheet:
-                try:
-                    # เคลียร์ข้อมูลเก่าทั้งหมดก่อน
-                    sheet.clear()
-                    # เตรียมข้อมูล header + data
-                    header = list(df_summary.columns)
-                    values = df_summary.values.tolist()
-                    sheet.append_row(header)
-                    for row in values:
-                        sheet.append_row(row)
-                    st.success("✅ บันทึกข้อมูลลง Google Sheets เรียบร้อยแล้ว")
-                except Exception as e:
-                    st.error(f"❌ เกิดข้อผิดพลาดขณะบันทึก: {e}")
 
     st.markdown("</div>", unsafe_allow_html=True)  # ปิด div.fade-in

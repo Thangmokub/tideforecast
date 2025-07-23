@@ -166,7 +166,7 @@ else:
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาด: {e}")
 
-    elif menu == "สรุปผลการพยากรณ์":
+       elif menu == "สรุปผลการพยากรณ์":
         st.title("📆 สรุปแนวโน้มรายเดือน")
 
         # เลือกเดือน
@@ -187,19 +187,55 @@ else:
                 today = daily.iloc[i]
                 prev = daily.iloc[i - 1]
 
-                trend = "น้ำขึ้น" if today['level'] > prev['level'] else "น้ำลง"
+                delta = today['level'] - prev['level']
+                trend = "🌊 น้ำขึ้น" if delta > 0 else "⬇️ น้ำลง"
                 salinity = ""
                 if today['level'] >= high_threshold:
                     salinity = "เค็ม"
                 elif today['level'] <= low_threshold:
                     salinity = "จืด"
 
-                label = trend + (" x " + salinity if salinity else "")
+                label = f"{trend} {'x ' + salinity if salinity else ''}"
                 rows.append({
-                    'วันที่': today['date'].strftime("%-d %b %Y"),
-                    'แนวโน้ม': label
+                    'วันที่': today['date'].strftime("%-d %b"),
+                    'ระดับเฉลี่ย (ม.)': f"{today['level']:.2f}",
+                    'แนวโน้ม': label,
+                    'Δ ระดับน้ำ (ม.)': f"{delta:+.2f}"
                 })
 
             df_summary = pd.DataFrame(rows).head(7)
-            st.subheader("🗓️ แนวโน้ม 7 วันแรกของเดือน")
-            st.table(df_summary)
+
+            # สไตล์ HTML ธีมธรรมชาติ
+            styled_table = """
+            <style>
+            .green-table {
+                background-color: #f1f8e9;
+                border-collapse: collapse;
+                width: 100%;
+                font-family: 'Kanit', sans-serif;
+                font-size: 18px;
+                margin-top: 20px;
+            }
+            .green-table th, .green-table td {
+                border: 1px solid #c5e1a5;
+                padding: 10px;
+                text-align: center;
+            }
+            .green-table th {
+                background-color: #aed581;
+                color: #1b5e20;
+            }
+            .green-table tr:nth-child(even) {
+                background-color: #e6ee9c;
+            }
+            </style>
+            """
+
+            # สร้างตาราง HTML
+            table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ ระดับน้ำ (ม.)</th></tr>"
+            for _, row in df_summary.iterrows():
+                table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ ระดับน้ำ (ม.)']}</td></tr>"
+            table_html += "</table>"
+
+            st.markdown("🗓️ **แนวโน้ม 7 วันแรกของเดือน**", unsafe_allow_html=True)
+            st.markdown(styled_table + table_html, unsafe_allow_html=True)

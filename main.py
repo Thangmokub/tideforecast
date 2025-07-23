@@ -39,6 +39,26 @@ st.markdown(r"""
         background-color: #388e3c;
         transform: scale(1.03);
     }
+    .green-table {
+        background-color: #f1f8e9;
+        border-collapse: collapse;
+        width: 100%;
+        font-family: 'Kanit', sans-serif;
+        font-size: 18px;
+        margin-top: 20px;
+    }
+    .green-table th, .green-table td {
+        border: 1px solid #c5e1a5;
+        padding: 10px;
+        text-align: center;
+    }
+    .green-table th {
+        background-color: #aed581;
+        color: #1b5e20;
+    }
+    .green-table tr:nth-child(odd) {
+        background-color: #cbe0b1;
+    }
     </style>
     <script>
     document.addEventListener('contextmenu', e => {
@@ -59,7 +79,7 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        st.rerun()
+        st.experimental_rerun()
 
 # ========================
 # ส่วนหลักของแอป
@@ -68,7 +88,7 @@ else:
     st.markdown("""
     <div class="fade-box">
         <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
-        <p>ยินดีต้อนรับ! คุณสามารถเลือกวันและดูแนวโน้มระดับน้ำได้เพื่อการเพาะปลูกที่แม่นยำ</p>
+        <p>ระบบนี้จะแสดงแนวโน้มระดับน้ำรายสัปดาห์เพื่อช่วยในการวางแผนเพาะปลูก</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -122,125 +142,62 @@ else:
     high_threshold = 3.51
     low_threshold = 1.90
 
-    menu = st.sidebar.selectbox("เลือกเมนู", ["เลือกวันและพยากรณ์", "สรุปผลการพยากรณ์"])
+    # --- ตรงนี้แสดงสรุปรายสัปดาห์ (แทนหน้าแรก) ---
+    # เลือกเดือน
+    month = st.selectbox("เลือกเดือน", pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y"))
+    month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")
+    df_month = df[df['ds'].dt.to_period("M") == month_dt.to_period("M")]
 
-    if menu == "เลือกวันและพยากรณ์":
-        st.title("📅 พยากรณ์น้ำขึ้น-น้ำลงแบบเลือกวัน")
-        selected_date = st.date_input("เลือกวันที่ต้องการดู", value=pd.to_datetime("2025-01-01"))
-        selected_date = pd.to_datetime(selected_date)
+    if df_month.empty:
+        st.warning("❌ ไม่มีข้อมูลในเดือนนี้")
+    else:
+        df_month['date'] = df_month['ds'].dt.date
+        daily = df_month.groupby('date')['y'].mean().reset_index()
 
-        df_today = df[df['ds'].dt.normalize() == selected_date]
-        if df_today.empty:
-            st.warning("❌ ไม่มีข้อมูลในวันนี้")
-        else:
-            st.dataframe(df_today)
+        # คำนวณสัปดาห์ของเดือน (เริ่มจากวันที่ 1)
+        daily['week'] = ((pd.to_datetime(daily['date']).dt.day - 1) // 7) + 1
 
-        st.subheader("🔮 พยากรณ์ล่วงหน้า")
-        periods = st.slider("พยากรณ์กี่ชั่วโมง?", 6, 168, 24)
+        weekly = daily.groupby('week').agg({
+            'y': 'mean',
+            'date': ['min', 'max']
+        }).reset_index()
+        weekly.columns = ['week', 'level_avg', 'date_start', 'date_end']
 
-        df_past = df[df['ds'] <= selected_date]
-        if len(df_past) < 10:
-            st.warning("⚠️ ข้อมูลในอดีตไม่เพียงพอ")
-        else:
-            model = Prophet()
-            try:
-                with st.spinner("กำลังพยากรณ์..."):
-                    model.fit(df_past)
-                    future = model.make_future_dataframe(periods=periods, freq='H')
-                    forecast = model.predict(future)
+        rows = []
+        for i in range(len(weekly)):
+            row = weekly.iloc[i]
+            if i > 0:
+                prev = weekly.iloc[i - 1]
+                diff = row['level_avg'] - prev['level_avg']
+                delta = f"{diff:+.2f}"
+                trend = "🌊 น้ำขึ้น" if diff > 0 else "⬇️ น้ำลง"
+            else:
+                delta = "-"
+                trend = "-"
 
-                st.session_state['forecast'] = forecast
-                st.session_state['periods'] = periods
+            # กำหนดสถานะเกลือ/จืด/ปกติ ตามระดับน้ำเฉลี่ย
+            if row['level_avg'] >= high_threshold:
+                salinity = "เค็ม"
+            elif row['level_avg'] <= low_threshold:
+                salinity = "จืด"
+            else:
+                salinity = "ปกติ"
 
-                st.subheader("📈 กราฟผลลัพธ์")
-                fig = model.plot(forecast)
-                ax = fig.gca()
-                ax.axhline(median_level, color='green', linestyle='--', label=f'ระดับน้ำปกติ ({median_level} ม.)')
-                ax.axhline(high_threshold, color='red', linestyle='--', label=f'🚨 น้ำขึ้นสูงเกิน (≥ {high_threshold} ม.)')
-                ax.axhline(low_threshold, color='blue', linestyle='--', label=f'⚠️ น้ำลดต่ำเกิน (≤ {low_threshold} ม.)')
-                ax.legend()
-                st.pyplot(fig)
+            rows.append({
+                "สัปดาห์ที่": f"สัปดาห์ {int(row['week'])}",
+                "ช่วงวันที่": f"{row['date_start'].strftime('%-d')}–{row['date_end'].strftime('%-d %b')}",
+                "ระดับเฉลี่ย (ม.)": f"{row['level_avg']:.2f} ({salinity})",
+                "แนวโน้ม": trend,
+                "Δ จากสัปดาห์ก่อน (ม.)": delta
+            })
 
-                st.subheader("📊 ตารางคาดการณ์ล่าสุด")
-                st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-            except Exception as e:
-                st.error(f"เกิดข้อผิดพลาด: {e}")
+        df_summary = pd.DataFrame(rows)
 
-    elif menu == "สรุปผลการพยากรณ์":
-        st.title("📆 สรุปแนวโน้มรายเดือน")
+        # สร้าง HTML ตาราง
+        table_html = "<table class='green-table'><tr><th>สัปดาห์ที่</th><th>ช่วงวันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากสัปดาห์ก่อน (ม.)</th></tr>"
+        for _, row in df_summary.iterrows():
+            table_html += f"<tr><td>{row['สัปดาห์ที่']}</td><td>{row['ช่วงวันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากสัปดาห์ก่อน (ม.)']}</td></tr>"
+        table_html += "</table>"
 
-        # เลือกเดือน
-        month = st.selectbox("เลือกเดือน", pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y"))
-        month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")
-
-        df_month = df[df['ds'].dt.to_period("M") == month_dt.to_period("M")]
-
-        if df_month.empty:
-            st.warning("❌ ไม่มีข้อมูลในเดือนนี้")
-        else:
-            # สรุปค่าระดับน้ำเฉลี่ยต่อวัน
-            daily = df_month.groupby(df_month['ds'].dt.date)['y'].mean().reset_index()
-            daily.columns = ['date', 'level']
-
-            rows = []
-            for i in range(1, len(daily)):
-                today = daily.iloc[i]
-                prev = daily.iloc[i - 1]
-
-                delta = today['level'] - prev['level']
-                trend = "🌊 น้ำขึ้น" if delta > 0 else "⬇️ น้ำลง"
-
-                if today['level'] >= high_threshold:
-                    salinity = "เค็ม"
-                elif today['level'] <= low_threshold:
-                    salinity = "จืด"
-                else:
-                    salinity = "ปกติ"
-
-                level_info = f"(ระดับน้ำ {today['level']:.2f} ม.)"
-                label = f"{trend} {level_info} {salinity}"
-
-                rows.append({
-                    'วันที่': today['date'].strftime("%-d %b"),
-                    'ระดับเฉลี่ย (ม.)': f"{today['level']:.2f}",
-                    'แนวโน้ม': label,
-                    'Δ ระดับน้ำ (ม.)': f"{delta:+.2f}"
-                })
-
-
-            df_summary = pd.DataFrame(rows).head(7)
-
-            # สไตล์ HTML ธีมธรรมชาติ
-            styled_table = """
-            <style>
-            .green-table {
-                background-color: #f1f8e9;
-                border-collapse: collapse;
-                width: 100%;
-                font-family: 'Kanit', sans-serif;
-                font-size: 18px;
-                margin-top: 20px;
-            }
-            .green-table th, .green-table td {
-                border: 1px solid #c5e1a5;
-                padding: 10px;
-                text-align: center;
-            }
-            .green-table th {
-                background-color: #aed581;
-                color: #1b5e20;
-            }
-            .green-table tr:nth-child(odd) {
-                background-color: #cbe0b1;
-            }
-            </style>
-            """
-
-            # สร้างตาราง HTML
-            table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ ระดับน้ำ (ม.)</th></tr>"
-            for _, row in df_summary.iterrows():
-                table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ ระดับน้ำ (ม.)']}</td></tr>"
-            table_html += "</table>"
-
-            st.markdown("🗓️ **แนวโน้ม 7 วันแรกของเดือน**", unsafe_allow_html=True)
-            st.markdown(styled_table + table_html, unsafe_allow_html=True)
+        st.markdown("🗓️ **แนวโน้มรายสัปดาห์ของเดือน**", unsafe_allow_html=True)
+        st.markdown(table_html, unsafe_allow_html=True)

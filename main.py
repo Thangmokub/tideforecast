@@ -230,7 +230,7 @@ else:
                 background-color: #aed581;
                 color: #1b5e20;
             }
-            .green-table tr:nth-child(even) {
+            .green-table tr:nth-child(odd) {
                 background-color: #cbe0b1;
             }
             </style>

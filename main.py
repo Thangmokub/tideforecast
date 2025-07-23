@@ -94,7 +94,7 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        st.experimental_rerun()
+        
 
 # ========================
 # ส่วนหลักของแอป (หน้าหลักหลังจากกดเริ่ม)

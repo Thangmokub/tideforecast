@@ -11,7 +11,7 @@ st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้�
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
-# CSS + JS
+# CSS + JS + fade-in animation
 st.markdown(r"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
@@ -59,6 +59,14 @@ st.markdown(r"""
     .green-table tr:nth-child(odd) {
         background-color: #cbe0b1;
     }
+    /* Fade-in animation */
+    @keyframes fadeIn {
+      from {opacity: 0;}
+      to {opacity: 1;}
+    }
+    .fade-in {
+      animation: fadeIn 1s ease-in forwards;
+    }
     </style>
     <script>
     document.addEventListener('contextmenu', e => {
@@ -71,7 +79,7 @@ st.markdown(r"""
 # ส่วนต้อนรับ
 if not st.session_state.app_started:
     st.markdown("""
-    <div class="fade-box" style="text-align:center; margin-top:100px;">
+    <div class="fade-box fade-in" style="text-align:center; margin-top:100px;">
         <h1>👩‍🌾 ยินดีต้อนรับสู่ระบบพยากรณ์น้ำขึ้นน้ำลงเพื่อการเกษตร</h1>
         <p style="font-size:20px;">กดปุ่มด้านล่างเพื่อเข้าสู่แอป</p>
     </div>
@@ -79,14 +87,14 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        
+        st.experimental_rerun()
 
 # ========================
 # ส่วนหลักของแอป
 # ========================
 else:
     st.markdown("""
-    <div class="fade-box">
+    <div class="fade-box fade-in">
         <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
         <p>ระบบนี้จะแสดงแนวโน้มระดับน้ำรายสัปดาห์เพื่อช่วยในการวางแผนเพาะปลูก</p>
     </div>
@@ -142,7 +150,7 @@ else:
     high_threshold = 3.51
     low_threshold = 1.90
 
-    # --- ตรงนี้แสดงสรุปรายสัปดาห์ (แทนหน้าแรก) ---
+    # --- แสดงสรุปรายสัปดาห์ ---
     # เลือกเดือน
     month = st.selectbox("เลือกเดือน", pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y"))
     month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")

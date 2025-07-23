@@ -167,28 +167,39 @@ else:
                 st.error(f"เกิดข้อผิดพลาด: {e}")
 
     elif menu == "สรุปผลการพยากรณ์":
-        if 'forecast' in st.session_state:
-            forecast = st.session_state['forecast']
-            periods = st.session_state['periods']
+        st.title("📆 สรุปแนวโน้มรายเดือน")
 
-            if len(forecast) > periods:
-                delta = forecast.iloc[-1]['yhat'] - forecast.iloc[-periods]['yhat']
-                current_level = forecast.iloc[-1]['yhat']
+        # เลือกเดือน
+        month = st.selectbox("เลือกเดือน", pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y"))
+        month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")
 
-                if delta > 0:
-                    msg = f"🌊 คาดว่าน้ำจะขึ้น {delta:.2f} เมตร"
-                else:
-                    msg = f"⬇️ คาดว่าน้ำจะลด {abs(delta):.2f} เมตร"
+        df_month = df[df['ds'].dt.to_period("M") == month_dt.to_period("M")]
 
-                if current_level >= high_threshold:
-                    msg += " (🚨 น้ำขึ้นสูงเกินค่าปกติ!)"
-                    st.error(msg)
-                elif current_level <= low_threshold:
-                    msg += " (⚠️ น้ำลดต่ำเกินค่าปกติ!)"
-                    st.warning(msg)
-                else:
-                    st.success(msg)
-            else:
-                st.warning("⚠️ ข้อมูลไม่เพียงพอสำหรับการเปรียบเทียบ")
+        if df_month.empty:
+            st.warning("❌ ไม่มีข้อมูลในเดือนนี้")
         else:
-            st.warning("⚠️ กรุณาพยากรณ์ก่อนในเมนูแรก")
+            # สรุปค่าระดับน้ำเฉลี่ยต่อวัน
+            daily = df_month.groupby(df_month['ds'].dt.date)['y'].mean().reset_index()
+            daily.columns = ['date', 'level']
+
+            rows = []
+            for i in range(1, len(daily)):
+                today = daily.iloc[i]
+                prev = daily.iloc[i - 1]
+
+                trend = "น้ำขึ้น" if today['level'] > prev['level'] else "น้ำลง"
+                salinity = ""
+                if today['level'] >= high_threshold:
+                    salinity = "เค็ม"
+                elif today['level'] <= low_threshold:
+                    salinity = "จืด"
+
+                label = trend + (" x " + salinity if salinity else "")
+                rows.append({
+                    'วันที่': today['date'].strftime("%-d %b %Y"),
+                    'แนวโน้ม': label
+                })
+
+            df_summary = pd.DataFrame(rows).head(7)
+            st.subheader("🗓️ แนวโน้ม 7 วันแรกของเดือน")
+            st.table(df_summary)

@@ -104,7 +104,7 @@ else:
     <div class="fade-in">
         <div class="fade-box">
             <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
-            <p>ระบบนี้จะแสดงแนวโน้มระดับน้ำรายสัปดาห์เพื่อช่วยในการวางแผนเพาะปลูก</p>
+            <p>ระบบนี้จะแสดงแนวโน้มระดับน้ำรายวันเพื่อช่วยในการวางแผนเพาะปลูก</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -166,24 +166,16 @@ else:
     if df_month.empty:
         st.warning("❌ ไม่มีข้อมูลในเดือนนี้")
     else:
-        df_month['date'] = df_month['ds'].dt.date
-        daily = df_month.groupby('date')['y'].mean().reset_index()
-
-        # คำนวณสัปดาห์ของเดือน (เริ่มจากวันที่ 1)
-        daily['week'] = ((pd.to_datetime(daily['date']).dt.day - 1) // 7) + 1
-
-        weekly = daily.groupby('week').agg({
-            'y': 'mean',
-            'date': ['min', 'max']
-        }).reset_index()
-        weekly.columns = ['week', 'level_avg', 'date_start', 'date_end']
+        # สรุปรายวัน
+        daily = df_month.groupby(df_month['ds'].dt.date)['y'].mean().reset_index()
+        daily.columns = ['date', 'level_avg']
 
         rows = []
-        for i in range(len(weekly)):
-            row = weekly.iloc[i]
+        for i in range(len(daily)):
+            today = daily.iloc[i]
             if i > 0:
-                prev = weekly.iloc[i - 1]
-                diff = row['level_avg'] - prev['level_avg']
+                prev = daily.iloc[i - 1]
+                diff = today['level_avg'] - prev['level_avg']
                 delta = f"{diff:+.2f}"
                 trend = "🌊 น้ำขึ้น" if diff > 0 else "⬇️ น้ำลง"
             else:
@@ -191,30 +183,29 @@ else:
                 trend = "-"
 
             # กำหนดสถานะเกลือ/จืด/ปกติ ตามระดับน้ำเฉลี่ย
-            if row['level_avg'] >= high_threshold:
+            if today['level_avg'] >= high_threshold:
                 salinity = "เค็ม"
-            elif row['level_avg'] <= low_threshold:
+            elif today['level_avg'] <= low_threshold:
                 salinity = "จืด"
             else:
                 salinity = "ปกติ"
 
             rows.append({
-                "สัปดาห์ที่": f"สัปดาห์ {int(row['week'])}",
-                "ช่วงวันที่": f"{row['date_start'].strftime('%-d')}–{row['date_end'].strftime('%-d %b')}",
-                "ระดับเฉลี่ย (ม.)": f"{row['level_avg']:.2f} ({salinity})",
+                "วันที่": today['date'].strftime("%-d %b %Y"),
+                "ระดับเฉลี่ย (ม.)": f"{today['level_avg']:.2f} ({salinity})",
                 "แนวโน้ม": trend,
-                "Δ จากสัปดาห์ก่อน (ม.)": delta
+                "Δ จากวันก่อน (ม.)": delta
             })
 
         df_summary = pd.DataFrame(rows)
 
         # สร้าง HTML ตาราง
-        table_html = "<table class='green-table'><tr><th>สัปดาห์ที่</th><th>ช่วงวันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากสัปดาห์ก่อน (ม.)</th></tr>"
+        table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th></tr>"
         for _, row in df_summary.iterrows():
-            table_html += f"<tr><td>{row['สัปดาห์ที่']}</td><td>{row['ช่วงวันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากสัปดาห์ก่อน (ม.)']}</td></tr>"
+            table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td></tr>"
         table_html += "</table>"
 
-        st.markdown("🗓️ **แนวโน้มรายสัปดาห์ของเดือน**", unsafe_allow_html=True)
+        st.markdown("🗓️ **แนวโน้มรายวันของเดือน**", unsafe_allow_html=True)
         st.markdown(table_html, unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)  # ปิด div.fade-in

@@ -189,19 +189,24 @@ else:
 
                 delta = today['level'] - prev['level']
                 trend = "🌊 น้ำขึ้น" if delta > 0 else "⬇️ น้ำลง"
-                salinity = ""
+
                 if today['level'] >= high_threshold:
                     salinity = "เค็ม"
                 elif today['level'] <= low_threshold:
                     salinity = "จืด"
+                else:
+                    salinity = "ปกติ"
 
-                label = f"{trend} {'x ' + salinity if salinity else ''}"
+                level_info = f"(ระดับน้ำ {today['level']:.2f} ม.)"
+                label = f"{trend} {level_info} {salinity}"
+
                 rows.append({
                     'วันที่': today['date'].strftime("%-d %b"),
                     'ระดับเฉลี่ย (ม.)': f"{today['level']:.2f}",
                     'แนวโน้ม': label,
                     'Δ ระดับน้ำ (ม.)': f"{delta:+.2f}"
                 })
+
 
             df_summary = pd.DataFrame(rows).head(7)
 

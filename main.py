@@ -204,7 +204,6 @@ else:
                     'วันที่': today['date'].strftime("%-d %b"),
                     'ระดับเฉลี่ย (ม.)': f"{today['level']:.2f}",
                     'แนวโน้ม': label,
-                    'Δ ระดับน้ำ (ม.)': f"{delta:+.2f}"
                 })
 
 

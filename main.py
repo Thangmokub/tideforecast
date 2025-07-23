@@ -231,7 +231,7 @@ else:
                 color: #1b5e20;
             }
             .green-table tr:nth-child(even) {
-                background-color: #e6ee9c;
+                background-color: #cbe0b1;
             }
             </style>
             """

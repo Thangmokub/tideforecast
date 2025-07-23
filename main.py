@@ -34,6 +34,7 @@ st.markdown(r"""
         border-radius: 8px;
         padding: 0.5em 1.5em;
         font-size: 18px;
+        cursor: pointer;
     }
     .stButton>button:hover {
         background-color: #388e3c;
@@ -60,12 +61,18 @@ st.markdown(r"""
         background-color: #cbe0b1;
     }
     /* Fade-in animation */
-    @keyframes fadeIn {
-      from {opacity: 0;}
-      to {opacity: 1;}
-    }
     .fade-in {
-      animation: fadeIn 1s ease-in forwards;
+        animation: fadeInAnimation ease 1.2s;
+        animation-iteration-count: 1;
+        animation-fill-mode: forwards;
+    }
+    @keyframes fadeInAnimation {
+        0% {
+            opacity: 0;
+        }
+        100% {
+            opacity: 1;
+        }
     }
     </style>
     <script>
@@ -87,17 +94,18 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        
+        st.experimental_rerun()
 
 # ========================
-# ส่วนหลักของแอป
+# ส่วนหลักของแอป (หน้าหลักหลังจากกดเริ่ม)
 # ========================
 else:
     st.markdown("""
-    <div class="fade-box fade-in">
-        <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
-        <p>ระบบนี้จะแสดงแนวโน้มระดับน้ำรายสัปดาห์เพื่อช่วยในการวางแผนเพาะปลูก</p>
-    </div>
+    <div class="fade-in">
+        <div class="fade-box">
+            <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
+            <p>ระบบนี้จะแสดงแนวโน้มระดับน้ำรายสัปดาห์เพื่อช่วยในการวางแผนเพาะปลูก</p>
+        </div>
     """, unsafe_allow_html=True)
 
     def load_and_clean_df(df):
@@ -150,7 +158,6 @@ else:
     high_threshold = 3.51
     low_threshold = 1.90
 
-    # --- แสดงสรุปรายสัปดาห์ ---
     # เลือกเดือน
     month = st.selectbox("เลือกเดือน", pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y"))
     month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")
@@ -209,3 +216,5 @@ else:
 
         st.markdown("🗓️ **แนวโน้มรายสัปดาห์ของเดือน**", unsafe_allow_html=True)
         st.markdown(table_html, unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)  # ปิด div.fade-in

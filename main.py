@@ -213,7 +213,7 @@ else:
                 "ระดับเฉลี่ย (ม.)": f"{today['level_avg']:.2f} ({salinity})",
                 "แนวโน้ม": trend,
                 "Δ จากวันก่อน (ม.)": delta,
-                "แนวโน้มความเค็ม (โดยประมาณ)": salinity_trend
+                "แนวโน้มความเค็ม": salinity_trend
             })
 
         df_summary = pd.DataFrame(rows)

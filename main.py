@@ -60,19 +60,14 @@ st.markdown(r"""
     .green-table tr:nth-child(odd) {
         background-color: #cbe0b1;
     }
-    /* Fade-in animation */
     .fade-in {
         animation: fadeInAnimation ease 1.2s;
         animation-iteration-count: 1;
         animation-fill-mode: forwards;
     }
     @keyframes fadeInAnimation {
-        0% {
-            opacity: 0;
-        }
-        100% {
-            opacity: 1;
-        }
+        0% { opacity: 0; }
+        100% { opacity: 1; }
     }
     </style>
     <script>
@@ -94,11 +89,7 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        
 
-# ========================
-# ส่วนหลักของแอป (หน้าหลักหลังจากกดเริ่ม)
-# ========================
 else:
     st.markdown("""
     <div class="fade-in">
@@ -131,22 +122,19 @@ else:
 
             if {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
                 return load_and_clean_df(df)
-
             elif {'ds', 'y'}.issubset(df.columns):
                 df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
                 df['y'] = pd.to_numeric(df['y'], errors='coerce')
                 return df[['ds', 'y']].dropna()
-
             elif df.shape[1] >= 3:
                 df.columns = ['วันที่', 'เวลา', 'ระดับน้ำ']
                 return load_and_clean_df(df)
-
             return pd.DataFrame()
         except Exception as e:
             st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
             return pd.DataFrame()
 
-    files = ['BP2025_all_months_for_prophet.csv','บางปะกง.csv', 'บางปะกง (3).csv']
+    files = ['BP2025_all_months_for_prophet.csv', 'บางปะกง.csv', 'บางปะกง (3).csv']
     dfs = [load_and_clean_csv(f) for f in files if os.path.isfile(f)]
     df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
 
@@ -166,7 +154,6 @@ else:
     if df_month.empty:
         st.warning("❌ ไม่มีข้อมูลในเดือนนี้")
     else:
-        # สรุปรายวัน
         daily = df_month.groupby(df_month['ds'].dt.date)['y'].mean().reset_index()
         daily.columns = ['date', 'level_avg']
 
@@ -182,7 +169,6 @@ else:
                 delta = "-"
                 trend = "-"
 
-            # กำหนดสถานะเกลือ/จืด/ปกติ ตามระดับน้ำเฉลี่ย
             if today['level_avg'] >= high_threshold:
                 salinity = "เค็ม"
             elif today['level_avg'] <= low_threshold:
@@ -190,22 +176,48 @@ else:
             else:
                 salinity = "ปกติ"
 
+            # ใหม่: เพิ่มแนวโน้มความเค็มโดยประมาณ
+            if trend == "🌊 น้ำขึ้น":
+                salinity_trend = "เค็มขึ้น"
+            elif trend == "⬇️ น้ำลง":
+                salinity_trend = "จืดลง"
+            else:
+                salinity_trend = "-"
+
             rows.append({
                 "วันที่": today['date'].strftime("%-d %b %Y"),
                 "ระดับเฉลี่ย (ม.)": f"{today['level_avg']:.2f} ({salinity})",
                 "แนวโน้ม": trend,
-                "Δ จากวันก่อน (ม.)": delta
+                "Δ จากวันก่อน (ม.)": delta,
+                "แนวโน้มความเค็ม (โดยประมาณ)": salinity_trend
             })
 
         df_summary = pd.DataFrame(rows)
 
-        # สร้าง HTML ตาราง
-        table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th></tr>"
+        # สร้าง HTML ตารางแบบใหม่
+        table_html = """
+        <table class='green-table'>
+            <tr>
+                <th>วันที่</th>
+                <th>ระดับเฉลี่ย (ม.)</th>
+                <th>แนวโน้ม</th>
+                <th>Δ จากวันก่อน (ม.)</th>
+                <th>แนวโน้มความเค็ม (โดยประมาณ)</th>
+            </tr>
+        """
         for _, row in df_summary.iterrows():
-            table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td></tr>"
+            table_html += f"""
+            <tr>
+                <td>{row['วันที่']}</td>
+                <td>{row['ระดับเฉลี่ย (ม.)']}</td>
+                <td>{row['แนวโน้ม']}</td>
+                <td>{row['Δ จากวันก่อน (ม.)']}</td>
+                <td>{row['แนวโน้มความเค็ม (โดยประมาณ)']}</td>
+            </tr>
+            """
         table_html += "</table>"
 
         st.markdown("🗓️ **แนวโน้มรายวันของเดือน**", unsafe_allow_html=True)
         st.markdown(table_html, unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)  # ปิด div.fade-in
+    st.markdown("</div>", unsafe_allow_html=True)

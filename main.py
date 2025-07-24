@@ -11,7 +11,7 @@ st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้�
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
-# CSS + JS + fade-in animation
+# CSS + JS + fade-in animation + ตารางปรับขนาดคอลัมน์
 st.markdown(r"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
@@ -47,11 +47,14 @@ st.markdown(r"""
         font-family: 'Kanit', sans-serif;
         font-size: 18px;
         margin-top: 20px;
+        table-layout: fixed;  /* บังคับความกว้างคอลัมน์ */
     }
     .green-table th, .green-table td {
         border: 1px solid #c5e1a5;
         padding: 10px;
         text-align: center;
+        word-wrap: break-word;  /* หักบรรทัดข้อความยาว */
+        overflow-wrap: break-word;
     }
     .green-table th {
         background-color: #aed581;
@@ -60,6 +63,13 @@ st.markdown(r"""
     .green-table tr:nth-child(odd) {
         background-color: #cbe0b1;
     }
+    /* กำหนดความกว้างคอลัมน์ */
+    .green-table th:nth-child(1), .green-table td:nth-child(1) { width: 18%; }   /* วันที่ */
+    .green-table th:nth-child(2), .green-table td:nth-child(2) { width: 22%; }   /* ระดับเฉลี่ย */
+    .green-table th:nth-child(3), .green-table td:nth-child(3) { width: 20%; }   /* แนวโน้ม */
+    .green-table th:nth-child(4), .green-table td:nth-child(4) { width: 20%; }   /* Δ จากวันก่อน */
+    .green-table th:nth-child(5), .green-table td:nth-child(5) { width: 20%; }   /* แนวโน้มความเค็ม */
+
     /* Fade-in animation */
     .fade-in {
         animation: fadeInAnimation ease 1.2s;
@@ -192,9 +202,9 @@ else:
 
             # เพิ่มแนวโน้มความเค็มโดยประมาณตามแนวโน้มน้ำขึ้นน้ำลง
             if trend == "🌊 น้ำขึ้น":
-                salinity_trend = "น้ำเค็ม"
+                salinity_trend = "เค็มขึ้น"
             elif trend == "⬇️ น้ำลง":
-                salinity_trend = "น้ำจืด"
+                salinity_trend = "จืดลง"
             else:
                 salinity_trend = "-"
 

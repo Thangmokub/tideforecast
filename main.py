@@ -208,28 +208,39 @@ else:
 
         df_summary = pd.DataFrame(rows)
 
-        # สร้าง HTML ตาราง
-        table_html = """
+table_html = """
+<style>
+.green-table {
+    background-color: #f1f8e9;
+    border-collapse: collapse;
+    width: 100%;
+    font-family: 'Kanit', sans-serif;
+    font-size: 18px;
+    margin-top: 20px;
+    table-layout: fixed;
+}
+.green-table th, .green-table td {
+    border: 1px solid #c5e1a5;
+    padding: 10px;
+    text-align: center;
+    overflow-wrap: break-word;
+}
+.green-table th {
+    background-color: #aed581;
+    color: #1b5e20;
+}
+.green-table tr:nth-child(odd) {
+    background-color: #cbe0b1;
+}
+</style>
 <table class='green-table'>
-    <tr>
-        <th>วันที่</th>
-        <th>ระดับเฉลี่ย (ม.)</th>
-        <th>แนวโน้ม</th>
-        <th>Δ จากวันก่อน (ม.)</th>
-        <th>แนวโน้มความเค็ม (โดยประมาณ)</th>
-    </tr>
+<tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม (โดยประมาณ)</th></tr>
 """
-        for _, row in df_summary.iterrows():
-            table_html += f"""
-    <tr>
-        <td>{row['วันที่']}</td>
-        <td>{row['ระดับเฉลี่ย (ม.)']}</td>
-        <td>{row['แนวโน้ม']}</td>
-        <td>{row['Δ จากวันก่อน (ม.)']}</td>
-        <td>{row['แนวโน้มความเค็ม (โดยประมาณ)']}</td>
-    </tr>
-    """
-        table_html += "</table>"
+
+for _, row in df_summary.iterrows():
+    table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td><td>{row['แนวโน้มความเค็ม (โดยประมาณ)']}</td></tr>"
+
+table_html += "</table>"
 
         st.markdown("🗓️ **แนวโน้มรายวันของเดือน**", unsafe_allow_html=True)
         st.markdown(table_html, unsafe_allow_html=True)

@@ -4,6 +4,7 @@ import pandas as pd
 from prophet import Prophet
 import matplotlib.pyplot as plt
 import os
+import textwrap
 from datetime import datetime
 
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")

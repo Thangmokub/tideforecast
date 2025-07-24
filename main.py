@@ -219,7 +219,7 @@ else:
         df_summary = pd.DataFrame(rows)
 
         # สร้าง HTML ตาราง (เพิ่มคอลัมน์แนวโน้มความเค็ม)
-        table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม (โดยประมาณ)</th></tr>"
+        table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม</th></tr>"
         for _, row in df_summary.iterrows():
             table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td><td>{row['แนวโน้มความเค็ม']}</td></tr>"
         table_html += "</table>"

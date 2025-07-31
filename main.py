@@ -20,10 +20,6 @@ try:
 except:
     pass
 
-# สถานะควบคุมการแสดงข้อความ fade หรือไม่ (เริ่มต้น True)
-if 'show_load_messages_with_fade' not in st.session_state:
-    st.session_state.show_load_messages_with_fade = True
-
 # ==========================
 # CSS + JS ตกแต่ง
 # ==========================
@@ -114,23 +110,6 @@ st.markdown(r"""
 """, unsafe_allow_html=True)
 
 # ==========================
-# ฟังก์ชันแสดงข้อความ fade
-# ==========================
-def show_fade_message(text, msg_type="success"):
-    color = {"success": "#4caf50", "warning": "#ff9800", "error": "#f44336"}.get(msg_type, "#2196f3")
-    st.markdown(
-        f'<div class="fade-out" style="color:{color}; font-weight:bold;">{text}</div>',
-        unsafe_allow_html=True
-    )
-
-# ==========================
-# ฟังก์ชันแสดงข้อความปกติ
-# ==========================
-def show_message_normal(text, msg_type="success"):
-    color = {"success": "#4caf50", "warning": "#ff9800", "error": "#f44336"}.get(msg_type, "#2196f3")
-    st.markdown(f'<div style="color:{color}; font-weight:bold;">{text}</div>', unsafe_allow_html=True)
-
-# ==========================
 # ฟังก์ชันทำความสะอาด CSV (แก้ชื่อคอลัมน์แปลกๆ)
 # ==========================
 def load_and_clean_csv(file):
@@ -211,21 +190,14 @@ else:
         if os.path.isfile(f):
             df_temp = load_and_clean_csv(f)
             if not df_temp.empty:
-                if st.session_state.show_load_messages_with_fade:
-                    show_fade_message(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)", "success")
-                else:
-                    show_message_normal(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)", "success")
+                # ไม่แสดงข้อความโหลดไฟล์
                 dfs.append(df_temp)
             else:
-                if st.session_state.show_load_messages_with_fade:
-                    show_fade_message(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้", "warning")
-                else:
-                    show_message_normal(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้", "warning")
+                # ถ้าไฟล์ไม่มีข้อมูล ใช้ warning message ธรรมดา (ไม่ fade)
+                st.warning(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้")
         else:
-            if st.session_state.show_load_messages_with_fade:
-                show_fade_message(f"❌ ไม่พบไฟล์ {f}", "error")
-            else:
-                show_message_normal(f"❌ ไม่พบไฟล์ {f}", "error")
+            # ถ้าไม่พบไฟล์ ใช้ error message ธรรมดา (ไม่ fade)
+            st.error(f"❌ ไม่พบไฟล์ {f}")
 
     if not dfs:
         st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")
@@ -239,11 +211,7 @@ else:
 
     months = pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y").tolist()
 
-    # แสดง selectbox เลือกเดือน
     month = st.selectbox("เลือกเดือน", months)
-
-    # เลือกเดือนแล้ว ปิด fade สำหรับข้อความโหลดข้อมูลในรอบถัดไป
-    st.session_state.show_load_messages_with_fade = False
 
     try:
         month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")

@@ -170,7 +170,6 @@ else:
     </div>""", unsafe_allow_html=True)
 
     files = [
-        'BP2025_all_months_for_prophet.csv',
         'บางปะกง.csv',
         'บางปะกง (3).csv',
         'บางปะกง (2).csv',

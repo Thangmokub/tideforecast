@@ -6,7 +6,6 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
 import locale
-import time
 
 # ==========================
 # ตั้งค่าเบื้องต้น
@@ -20,6 +19,10 @@ try:
     locale.setlocale(locale.LC_TIME, "th_TH.UTF-8")
 except:
     pass
+
+# สถานะควบคุมการแสดงข้อความ fade หรือไม่ (เริ่มต้น True)
+if 'show_load_messages_with_fade' not in st.session_state:
+    st.session_state.show_load_messages_with_fade = True
 
 # ==========================
 # CSS + JS ตกแต่ง
@@ -110,20 +113,22 @@ st.markdown(r"""
     </script>
 """, unsafe_allow_html=True)
 
-
 # ==========================
-# ฟังก์ชันแสดงข้อความ fade out แล้วลบจริง
+# ฟังก์ชันแสดงข้อความ fade
 # ==========================
-def show_fade_message_real_disappear(text, msg_type="success", display_time=2, fade_time=3):
+def show_fade_message(text, msg_type="success"):
     color = {"success": "#4caf50", "warning": "#ff9800", "error": "#f44336"}.get(msg_type, "#2196f3")
-    placeholder = st.empty()
-    placeholder.markdown(
+    st.markdown(
         f'<div class="fade-out" style="color:{color}; font-weight:bold;">{text}</div>',
         unsafe_allow_html=True
     )
-    time.sleep(display_time + fade_time)
-    placeholder.empty()
 
+# ==========================
+# ฟังก์ชันแสดงข้อความปกติ
+# ==========================
+def show_message_normal(text, msg_type="success"):
+    color = {"success": "#4caf50", "warning": "#ff9800", "error": "#f44336"}.get(msg_type, "#2196f3")
+    st.markdown(f'<div style="color:{color}; font-weight:bold;">{text}</div>', unsafe_allow_html=True)
 
 # ==========================
 # ฟังก์ชันทำความสะอาด CSV (แก้ชื่อคอลัมน์แปลกๆ)
@@ -132,10 +137,8 @@ def load_and_clean_csv(file):
     try:
         df = pd.read_csv(file, encoding='utf-8')
 
-        # ลบอักขระแปลกในชื่อคอลัมน์
         df.columns = [col.strip().replace('\ufeff', '').replace('', '') for col in df.columns]
 
-        # แปลงชื่อคอลัมน์ที่มีโอกาสต่างกันให้เป็นมาตรฐาน
         col_map = {}
         for col in df.columns:
             c = col.lower()
@@ -147,7 +150,6 @@ def load_and_clean_csv(file):
                 col_map[col] = 'ระดับน้ำ'
         df.rename(columns=col_map, inplace=True)
 
-        # เช็คว่ามีคอลัมน์ครบหรือไม่
         if not {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
             return pd.DataFrame()
 
@@ -173,7 +175,6 @@ def load_and_clean_csv(file):
         st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
         return pd.DataFrame()
 
-
 # ==========================
 # ส่วนต้อนรับ
 # ==========================
@@ -185,7 +186,6 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-
 
 # ==========================
 # ส่วนหลัก
@@ -211,12 +211,21 @@ else:
         if os.path.isfile(f):
             df_temp = load_and_clean_csv(f)
             if not df_temp.empty:
-                show_fade_message_real_disappear(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)", "success")
+                if st.session_state.show_load_messages_with_fade:
+                    show_fade_message(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)", "success")
+                else:
+                    show_message_normal(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)", "success")
                 dfs.append(df_temp)
             else:
-                show_fade_message_real_disappear(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้", "warning")
+                if st.session_state.show_load_messages_with_fade:
+                    show_fade_message(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้", "warning")
+                else:
+                    show_message_normal(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้", "warning")
         else:
-            show_fade_message_real_disappear(f"❌ ไม่พบไฟล์ {f}", "error")
+            if st.session_state.show_load_messages_with_fade:
+                show_fade_message(f"❌ ไม่พบไฟล์ {f}", "error")
+            else:
+                show_message_normal(f"❌ ไม่พบไฟล์ {f}", "error")
 
     if not dfs:
         st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")
@@ -229,7 +238,12 @@ else:
     low_threshold = 1.90
 
     months = pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y").tolist()
+
+    # แสดง selectbox เลือกเดือน
     month = st.selectbox("เลือกเดือน", months)
+
+    # เลือกเดือนแล้ว ปิด fade สำหรับข้อความโหลดข้อมูลในรอบถัดไป
+    st.session_state.show_load_messages_with_fade = False
 
     try:
         month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")

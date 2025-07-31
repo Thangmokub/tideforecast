@@ -4,13 +4,25 @@ from datetime import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
+import locale
 
+# ==========================
+# ตั้งค่าเบื้องต้น
+# ==========================
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
-# CSS + JS + fade-in animation + ตารางปรับขนาดคอลัมน์
+# ตั้งค่า locale สำหรับภาษาไทย
+try:
+    locale.setlocale(locale.LC_TIME, "th_TH.UTF-8")
+except:
+    pass  # ถ้ารันบน Windows บางครั้ง locale ไทยใช้ไม่ได้
+
+# ==========================
+# CSS + JS สำหรับตกแต่ง
+# ==========================
 st.markdown(r"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
@@ -46,13 +58,13 @@ st.markdown(r"""
         font-family: 'Kanit', sans-serif;
         font-size: 18px;
         margin-top: 20px;
-        table-layout: fixed;  /* บังคับความกว้างคอลัมน์ */
+        table-layout: fixed;
     }
     .green-table th, .green-table td {
         border: 1px solid #c5e1a5;
         padding: 10px;
         text-align: center;
-        word-wrap: break-word;  /* หักบรรทัดข้อความยาว */
+        word-wrap: break-word;
         overflow-wrap: break-word;
     }
     .green-table th {
@@ -62,26 +74,20 @@ st.markdown(r"""
     .green-table tr:nth-child(odd) {
         background-color: #cbe0b1;
     }
-    /* กำหนดความกว้างคอลัมน์ */
-    .green-table th:nth-child(1), .green-table td:nth-child(1) { width: 18%; }   /* วันที่ */
-    .green-table th:nth-child(2), .green-table td:nth-child(2) { width: 22%; }   /* ระดับเฉลี่ย */
-    .green-table th:nth-child(3), .green-table td:nth-child(3) { width: 20%; }   /* แนวโน้ม */
-    .green-table th:nth-child(4), .green-table td:nth-child(4) { width: 20%; }   /* Δ จากวันก่อน */
-    .green-table th:nth-child(5), .green-table td:nth-child(5) { width: 20%; }   /* แนวโน้มความเค็ม */
+    .green-table th:nth-child(1), .green-table td:nth-child(1) { width: 18%; }
+    .green-table th:nth-child(2), .green-table td:nth-child(2) { width: 22%; }
+    .green-table th:nth-child(3), .green-table td:nth-child(3) { width: 20%; }
+    .green-table th:nth-child(4), .green-table td:nth-child(4) { width: 20%; }
+    .green-table th:nth-child(5), .green-table td:nth-child(5) { width: 20%; }
 
-    /* Fade-in animation */
     .fade-in {
         animation: fadeInAnimation ease 1.2s;
         animation-iteration-count: 1;
         animation-fill-mode: forwards;
     }
     @keyframes fadeInAnimation {
-        0% {
-            opacity: 0;
-        }
-        100% {
-            opacity: 1;
-        }
+        0% { opacity: 0; }
+        100% { opacity: 1; }
     }
     </style>
     <script>
@@ -92,7 +98,47 @@ st.markdown(r"""
     </script>
 """, unsafe_allow_html=True)
 
+# ==========================
+# ฟังก์ชันโหลดและทำความสะอาด CSV
+# ==========================
+def load_and_clean_df(df):
+    def convert(row):
+        try:
+            d, m, y_th = map(int, str(row['วันที่']).split("/"))
+            y_ad = y_th - 543
+            h, mi, s = map(int, str(row['เวลา']).split(":"))
+            return datetime(y_ad, m, d, h, mi, s)
+        except:
+            return pd.NaT
+
+    df['ds'] = df.apply(convert, axis=1)
+    df['y'] = pd.to_numeric(df['ระดับน้ำ'], errors='coerce')
+    return df[['ds', 'y']].dropna()
+
+def load_and_clean_csv(file):
+    try:
+        df = pd.read_csv(file, encoding='utf-8')
+
+        if {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
+            return load_and_clean_df(df)
+
+        elif {'ds', 'y'}.issubset(df.columns):
+            df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
+            df['y'] = pd.to_numeric(df['y'], errors='coerce')
+            return df[['ds', 'y']].dropna()
+
+        elif df.shape[1] >= 3:
+            df.columns = ['วันที่', 'เวลา', 'ระดับน้ำ']
+            return load_and_clean_df(df)
+
+        return pd.DataFrame()
+    except Exception as e:
+        st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
+        return pd.DataFrame()
+
+# ==========================
 # ส่วนต้อนรับ
+# ==========================
 if not st.session_state.app_started:
     st.markdown("""<div class="fade-box fade-in" style="text-align:center; margin-top:100px;">
         <h1>👩‍🌾 ยินดีต้อนรับสู่ระบบพยากรณ์น้ำขึ้นน้ำลงเพื่อการเกษตร</h1>
@@ -102,10 +148,9 @@ if not st.session_state.app_started:
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
 
-
-# ========================
-# ส่วนหลักของแอป (หน้าหลักหลังจากกดเริ่ม)
-# ========================
+# ==========================
+# ส่วนหลัก
+# ==========================
 else:
     st.markdown("""<div class="fade-in">
         <div class="fade-box">
@@ -114,65 +159,38 @@ else:
         </div>
     </div>""", unsafe_allow_html=True)
 
-    def load_and_clean_df(df):
-        try:
-            def convert(row):
-                try:
-                    d, m, y_th = map(int, str(row['วันที่']).split("/"))
-                    y_ad = y_th - 543
-                    h, mi, s = map(int, str(row['เวลา']).split(":"))
-                    return datetime(y_ad, m, d, h, mi, s)
-                except:
-                    return pd.NaT
-
-            df['ds'] = df.apply(convert, axis=1)
-            df['y'] = pd.to_numeric(df['ระดับน้ำ'], errors='coerce')
-            return df[['ds', 'y']].dropna()
-        except:
-            return pd.DataFrame()
-
-    def load_and_clean_csv(file):
-        try:
-            df = pd.read_csv(file, encoding='utf-8')
-
-            if {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
-                return load_and_clean_df(df)
-
-            elif {'ds', 'y'}.issubset(df.columns):
-                df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
-                df['y'] = pd.to_numeric(df['y'], errors='coerce')
-                return df[['ds', 'y']].dropna()
-
-            elif df.shape[1] >= 3:
-                df.columns = ['วันที่', 'เวลา', 'ระดับน้ำ']
-                return load_and_clean_df(df)
-
-            return pd.DataFrame()
-        except Exception as e:
-            st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
-            return pd.DataFrame()
-
+    # โหลดข้อมูลจากไฟล์หลายไฟล์
     files = ['BP2025_all_months_for_prophet.csv', 'บางปะกง.csv', 'บางปะกง (3).csv']
-    dfs = [load_and_clean_csv(f) for f in files if os.path.isfile(f)]
-    df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
+    dfs = [load_and_clean_csv(f) for f in files if os.path.isfile(f) and not load_and_clean_csv(f).empty]
 
-    if df.empty:
+    if not dfs:
         st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")
         st.stop()
 
+    df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
+
+    # ค่ากำหนด threshold
     median_level = 2.82
     high_threshold = 3.51
     low_threshold = 1.90
 
-    # เลือกเดือน
-    month = st.selectbox("เลือกเดือน", pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y"))
-    month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")
+    # สร้าง list เดือนให้เลือก
+    months = pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y").tolist()
+    month = st.selectbox("เลือกเดือน", months)
+
+    # แปลงชื่อเดือนเป็น datetime
+    try:
+        month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")
+    except:
+        st.error("❌ ไม่สามารถแปลงชื่อเดือนเป็นวันที่ได้")
+        st.stop()
+
     df_month = df[df['ds'].dt.to_period("M") == month_dt.to_period("M")]
 
     if df_month.empty:
         st.warning("❌ ไม่มีข้อมูลในเดือนนี้")
     else:
-        # สรุปรายวัน
+        # สรุปค่าเฉลี่ยรายวัน
         daily = df_month.groupby(df_month['ds'].dt.date)['y'].mean().reset_index()
         daily.columns = ['date', 'level_avg']
 
@@ -188,7 +206,7 @@ else:
                 delta = "-"
                 trend = "-"
 
-            # กำหนดสถานะเกลือ/จืด/ปกติ ตามระดับน้ำเฉลี่ย
+            # กำหนดสถานะความเค็ม
             if today['level_avg'] >= high_threshold:
                 salinity = "เค็ม"
             elif today['level_avg'] <= low_threshold:
@@ -196,13 +214,7 @@ else:
             else:
                 salinity = "ปกติ"
 
-            # เพิ่มแนวโน้มความเค็มโดยประมาณตามแนวโน้มน้ำขึ้นน้ำลง
-            if trend == "🌊 น้ำขึ้น":
-                salinity_trend = "น้ำเค็ม"
-            elif trend == "⬇️ น้ำลง":
-                salinity_trend = "น้ำจืด"
-            else:
-                salinity_trend = "-"
+            salinity_trend = "น้ำเค็ม" if trend == "🌊 น้ำขึ้น" else ("น้ำจืด" if trend == "⬇️ น้ำลง" else "-")
 
             rows.append({
                 "วันที่": today['date'].strftime("%-d %b %Y"),
@@ -214,26 +226,34 @@ else:
 
         df_summary = pd.DataFrame(rows)
 
-        # ------------- ฟังก์ชันสำหรับการเชื่อมต่อ Google Sheets -------------
+        # ====== ฟังก์ชันเชื่อม Google Sheets ======
         def connect_to_google_sheets():
-            scope = ["https://docs.google.com/spreadsheets/d/1RHi72uEhlTXParxn0jDfLwKJcQGJoamW7XYjvvnhIac/edit?usp=sharing", "https://www.googleapis.com/auth/drive"]
+            scope = ["https://spreadsheets.google.com/feeds",
+                     "https://www.googleapis.com/auth/drive"]
             creds = ServiceAccountCredentials.from_json_keyfile_name("bangprakong-e632dd777e72.json", scope)
-            client = gspread.authorize(creds)
-            return client
+            return gspread.authorize(creds)
 
-        # ฟังก์ชันสำหรับการเขียนข้อมูลไป Google Sheets
-        def write_to_google_sheets(dataframe, sheet_name):
-            client = connect_to_google_sheets()
-            sheet = client.open_by_key("1RHi72uEhlTXParxn0jDfLwKJcQGJoamW7XYjvvnhIac").sheet1  # ใช้ ID ของ Google Sheets
-            for i, row in dataframe.iterrows():
-                sheet.append_row([row["วันที่"], row["ระดับน้ำ"], row["แนวโน้ม"], row["แนวโน้มความเค็ม"]])  # ส่งข้อมูลไปที่คอลัมน์ A, B, C, D
+        def write_to_google_sheets(dataframe):
+            try:
+                client = connect_to_google_sheets()
+                sheet = client.open_by_key("1RHi72uEhlTXParxn0jDfLwKJcQGJoamW7XYjvvnhIac").sheet1
 
-        # การรับข้อมูลจาก Streamlit และส่งไป Google Sheets
+                # เตรียมข้อมูลเป็น list
+                data = [["วันที่", "ระดับเฉลี่ย (ม.)", "แนวโน้ม", "Δ จากวันก่อน (ม.)", "แนวโน้มความเค็ม"]]
+                for _, row in dataframe.iterrows():
+                    data.append([row["วันที่"], row["ระดับเฉลี่ย (ม.)"], row["แนวโน้ม"], row["Δ จากวันก่อน (ม.)"], row["แนวโน้มความเค็ม"]])
+
+                sheet.clear()      # ลบข้อมูลเดิม
+                sheet.update("A1", data)  # อัปเดตใหม่ทั้งหมด
+                st.success("✅ ส่งข้อมูลไป Google Sheets สำเร็จ!")
+            except Exception as e:
+                st.error(f"❌ ไม่สามารถเขียน Google Sheets: {e}")
+
+        # ปุ่มส่งข้อมูล
         if st.button("ส่งข้อมูลไป Google Sheets"):
-            write_to_google_sheets(df_summary, "Water Level Data")  # ใช้ชื่อ Google Sheets ของคุณ
-            st.success("ข้อมูลถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว!")
+            write_to_google_sheets(df_summary)
 
-        # สร้าง HTML ตาราง (เพิ่มคอลัมน์แนวโน้มความเค็ม)
+        # สร้าง HTML ตาราง
         table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม</th></tr>"
         for _, row in df_summary.iterrows():
             table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td><td>{row['แนวโน้มความเค็ม']}</td></tr>"
@@ -241,5 +261,3 @@ else:
 
         st.markdown("🗓️ **แนวโน้มรายวันของเดือน**", unsafe_allow_html=True)
         st.markdown(table_html, unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)  # ปิด div.fade-in

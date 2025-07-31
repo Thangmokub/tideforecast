@@ -164,7 +164,7 @@ else:
         'BP2025_all_months_for_prophet.csv',
         'บางปะกง.csv',
         'บางปะกง (3).csv',
-        'บางปะกง (2).csv'
+        'บางปะกง (2).csv','กรกฎา.csv','สิงหา.csv'
     ]
     dfs = [load_and_clean_csv(f) for f in files if os.path.isfile(f) and not load_and_clean_csv(f).empty]
 

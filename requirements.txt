@@ -4,3 +4,5 @@ matplotlib
 prophet
 beautifulsoup4
 requests
+gspread
+oauth2client

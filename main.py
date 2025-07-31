@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -14,11 +15,10 @@ st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้�
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
-# ตั้งค่า locale ภาษาไทย
 try:
     locale.setlocale(locale.LC_TIME, "th_TH.UTF-8")
 except:
-    pass  # Windows บางเครื่องใช้ไม่ได้
+    pass
 
 # ==========================
 # CSS + JS ตกแต่ง
@@ -159,28 +159,39 @@ else:
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # โหลดข้อมูลจากหลายไฟล์
+    # รายชื่อไฟล์ CSV
     files = [
         'BP2025_all_months_for_prophet.csv',
         'บางปะกง.csv',
         'บางปะกง (3).csv',
-        'บางปะกง (2).csv','กรกฎา.csv','สิงหา.csv'
+        'บางปะกง (2).csv',
+        'กรกฎา.csv',
+        'สิงหา.csv'
     ]
-    dfs = [load_and_clean_csv(f) for f in files if os.path.isfile(f) and not load_and_clean_csv(f).empty]
+
+    # ✅ โหลดข้อมูลจากหลายไฟล์อย่างถูกต้อง
+    dfs = []
+    for f in files:
+        if os.path.isfile(f):
+            df_temp = load_and_clean_csv(f)
+            if not df_temp.empty:
+                st.success(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)")
+                dfs.append(df_temp)
+            else:
+                st.warning(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้")
+        else:
+            st.warning(f"❌ ไม่พบไฟล์ {f}")
 
     if not dfs:
         st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")
         st.stop()
 
-    # รวมข้อมูลข้ามปี
     df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
 
-    # ค่ากำหนด threshold
     median_level = 2.82
     high_threshold = 3.51
     low_threshold = 1.90
 
-    # ===== เลือกเดือน-ปี ข้ามปีได้ =====
     months = pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y").tolist()
     month = st.selectbox("เลือกเดือน", months)
 
@@ -195,7 +206,6 @@ else:
     if df_month.empty:
         st.warning("❌ ไม่มีข้อมูลในเดือนนี้")
     else:
-        # สรุปค่าเฉลี่ยรายวัน
         daily = df_month.groupby(df_month['ds'].dt.date)['y'].mean().reset_index()
         daily.columns = ['date', 'level_avg']
 
@@ -211,7 +221,6 @@ else:
                 delta = "-"
                 trend = "-"
 
-            # กำหนดสถานะความเค็ม
             if today['level_avg'] >= high_threshold:
                 salinity = "เค็ม"
             elif today['level_avg'] <= low_threshold:
@@ -231,10 +240,8 @@ else:
 
         df_summary = pd.DataFrame(rows)
 
-        # ===== เชื่อม Google Sheets =====
         def connect_to_google_sheets():
-            scope = ["https://spreadsheets.google.com/feeds",
-                     "https://www.googleapis.com/auth/drive"]
+            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             creds = ServiceAccountCredentials.from_json_keyfile_name("bangprakong-e632dd777e72.json", scope)
             return gspread.authorize(creds)
 
@@ -242,23 +249,18 @@ else:
             try:
                 client = connect_to_google_sheets()
                 sheet = client.open_by_key("1RHi72uEhlTXParxn0jDfLwKJcQGJoamW7XYjvvnhIac").sheet1
-
-                # เตรียมข้อมูลเป็น list
                 data = [["วันที่", "ระดับเฉลี่ย (ม.)", "แนวโน้ม", "Δ จากวันก่อน (ม.)", "แนวโน้มความเค็ม"]]
                 for _, row in dataframe.iterrows():
                     data.append([row["วันที่"], row["ระดับเฉลี่ย (ม.)"], row["แนวโน้ม"], row["Δ จากวันก่อน (ม.)"], row["แนวโน้มความเค็ม"]])
-
                 sheet.clear()
                 sheet.update("A1", data)
                 st.success("✅ ส่งข้อมูลไป Google Sheets สำเร็จ!")
             except Exception as e:
                 st.error(f"❌ ไม่สามารถเขียน Google Sheets: {e}")
 
-        # ปุ่มส่งข้อมูล
         if st.button("ส่งข้อมูลไป Google Sheets"):
             write_to_google_sheets(df_summary)
 
-        # HTML ตาราง
         table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม</th></tr>"
         for _, row in df_summary.iterrows():
             table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td><td>{row['แนวโน้มความเค็ม']}</td></tr>"

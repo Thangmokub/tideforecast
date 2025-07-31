@@ -99,19 +99,26 @@ st.markdown(r"""
 """, unsafe_allow_html=True)
 
 # ==========================
-# ฟังก์ชันโหลดและทำความสะอาด CSV
+# ฟังก์ชันทำความสะอาด CSV (แก้ชื่อคอลัมน์แปลกๆ)
 # ==========================
 def load_and_clean_csv(file):
     try:
         df = pd.read_csv(file, encoding='utf-8')
 
-        # แปลงชื่อคอลัมน์แบบต่าง ๆ ให้อยู่ในรูปมาตรฐาน
-        rename_map = {
-            'ds': 'วันที่',
-            'time': 'เวลา',
-            'y': 'ระดับน้ำ'
-        }
-        df.rename(columns=rename_map, inplace=True)
+        # ลบอักขระแปลกในชื่อคอลัมน์
+        df.columns = [col.strip().replace('\ufeff', '').replace('', '') for col in df.columns]
+
+        # แปลงชื่อคอลัมน์ที่มีโอกาสต่างกันให้เป็นมาตรฐาน
+        col_map = {}
+        for col in df.columns:
+            c = col.lower()
+            if c.startswith('ds'):
+                col_map[col] = 'วันที่'
+            elif c == 'time':
+                col_map[col] = 'เวลา'
+            elif c == 'y':
+                col_map[col] = 'ระดับน้ำ'
+        df.rename(columns=col_map, inplace=True)
 
         # เช็คว่ามีคอลัมน์ครบหรือไม่
         if not {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
@@ -162,7 +169,6 @@ else:
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # รายชื่อไฟล์ CSV
     files = [
         'BP2025_all_months_for_prophet.csv',
         'บางปะกง.csv',
@@ -172,7 +178,6 @@ else:
         'สิงหา.csv'
     ]
 
-    # โหลดข้อมูลจากหลายไฟล์
     dfs = []
     for f in files:
         if os.path.isfile(f):

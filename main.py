@@ -120,6 +120,7 @@ def show_fade_message(text, msg_type="success"):
         f'<div class="fade-out" style="color:{color}; font-weight:bold;">{text}</div>',
         unsafe_allow_html=True
     )
+    # NOTE: ข้อความจะจางเองตาม CSS animation ไม่ต้องใช้ time.sleep
 
 
 # ==========================

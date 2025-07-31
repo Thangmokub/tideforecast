@@ -80,7 +80,6 @@ st.markdown(r"""
     .green-table th:nth-child(4), .green-table td:nth-child(4) { width: 20%; }
     .green-table th:nth-child(5), .green-table td:nth-child(5) { width: 20%; }
 
-    /* fade-in */
     .fade-in {
         animation: fadeInAnimation ease 1.2s;
         animation-iteration-count: 1;
@@ -89,16 +88,6 @@ st.markdown(r"""
     @keyframes fadeInAnimation {
         0% { opacity: 0; }
         100% { opacity: 1; }
-    }
-
-    /* fade-out */
-    .fade-out {
-        animation: fadeOutAnimation 3s forwards;
-        animation-delay: 2s;
-    }
-    @keyframes fadeOutAnimation {
-        0% { opacity: 1; }
-        100% { opacity: 0; }
     }
     </style>
     <script>
@@ -116,8 +105,10 @@ def load_and_clean_csv(file):
     try:
         df = pd.read_csv(file, encoding='utf-8')
 
+        # ลบอักขระแปลกในชื่อคอลัมน์
         df.columns = [col.strip().replace('\ufeff', '').replace('', '') for col in df.columns]
 
+        # แปลงชื่อคอลัมน์ที่มีโอกาสต่างกันให้เป็นมาตรฐาน
         col_map = {}
         for col in df.columns:
             c = col.lower()
@@ -129,6 +120,7 @@ def load_and_clean_csv(file):
                 col_map[col] = 'ระดับน้ำ'
         df.rename(columns=col_map, inplace=True)
 
+        # เช็คว่ามีคอลัมน์ครบหรือไม่
         if not {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
             return pd.DataFrame()
 
@@ -190,14 +182,12 @@ else:
         if os.path.isfile(f):
             df_temp = load_and_clean_csv(f)
             if not df_temp.empty:
-                # ไม่แสดงข้อความโหลดไฟล์
+                # ลบข้อความโหลดข้อมูลสำเร็จออก ไม่แสดงอะไร
                 dfs.append(df_temp)
             else:
-                # ถ้าไฟล์ไม่มีข้อมูล ใช้ warning message ธรรมดา (ไม่ fade)
                 st.warning(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้")
         else:
-            # ถ้าไม่พบไฟล์ ใช้ error message ธรรมดา (ไม่ fade)
-            st.error(f"❌ ไม่พบไฟล์ {f}")
+            st.warning(f"❌ ไม่พบไฟล์ {f}")
 
     if not dfs:
         st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")
@@ -210,7 +200,6 @@ else:
     low_threshold = 1.90
 
     months = pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y").tolist()
-
     month = st.selectbox("เลือกเดือน", months)
 
     try:

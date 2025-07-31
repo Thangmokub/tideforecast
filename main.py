@@ -14,14 +14,14 @@ st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้�
 if 'app_started' not in st.session_state:
     st.session_state.app_started = False
 
-# ตั้งค่า locale สำหรับภาษาไทย
+# ตั้งค่า locale ภาษาไทย
 try:
     locale.setlocale(locale.LC_TIME, "th_TH.UTF-8")
 except:
-    pass  # ถ้ารันบน Windows บางครั้ง locale ไทยใช้ไม่ได้
+    pass  # Windows บางเครื่องใช้ไม่ได้
 
 # ==========================
-# CSS + JS สำหรับตกแต่ง
+# CSS + JS ตกแต่ง
 # ==========================
 st.markdown(r"""
     <style>
@@ -99,7 +99,7 @@ st.markdown(r"""
 """, unsafe_allow_html=True)
 
 # ==========================
-# ฟังก์ชันโหลดและทำความสะอาด CSV
+# ฟังก์ชันทำความสะอาด CSV
 # ==========================
 def load_and_clean_df(df):
     def convert(row):
@@ -159,14 +159,20 @@ else:
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # โหลดข้อมูลจากไฟล์หลายไฟล์
-    files = ['BP2025_all_months_for_prophet.csv', 'บางปะกง.csv', 'บางปะกง (3).csv','บางปะกง (2).csv']
+    # โหลดข้อมูลจากหลายไฟล์
+    files = [
+        'BP2025_all_months_for_prophet.csv',
+        'บางปะกง.csv',
+        'บางปะกง (3).csv',
+        'บางปะกง (2).csv'
+    ]
     dfs = [load_and_clean_csv(f) for f in files if os.path.isfile(f) and not load_and_clean_csv(f).empty]
 
     if not dfs:
         st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")
         st.stop()
 
+    # รวมข้อมูลข้ามปี
     df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
 
     # ค่ากำหนด threshold
@@ -174,11 +180,10 @@ else:
     high_threshold = 3.51
     low_threshold = 1.90
 
-    # สร้าง list เดือนให้เลือก
+    # ===== เลือกเดือน-ปี ข้ามปีได้ =====
     months = pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y").tolist()
     month = st.selectbox("เลือกเดือน", months)
 
-    # แปลงชื่อเดือนเป็น datetime
     try:
         month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")
     except:
@@ -226,7 +231,7 @@ else:
 
         df_summary = pd.DataFrame(rows)
 
-        # ====== ฟังก์ชันเชื่อม Google Sheets ======
+        # ===== เชื่อม Google Sheets =====
         def connect_to_google_sheets():
             scope = ["https://spreadsheets.google.com/feeds",
                      "https://www.googleapis.com/auth/drive"]
@@ -243,8 +248,8 @@ else:
                 for _, row in dataframe.iterrows():
                     data.append([row["วันที่"], row["ระดับเฉลี่ย (ม.)"], row["แนวโน้ม"], row["Δ จากวันก่อน (ม.)"], row["แนวโน้มความเค็ม"]])
 
-                sheet.clear()      # ลบข้อมูลเดิม
-                sheet.update("A1", data)  # อัปเดตใหม่ทั้งหมด
+                sheet.clear()
+                sheet.update("A1", data)
                 st.success("✅ ส่งข้อมูลไป Google Sheets สำเร็จ!")
             except Exception as e:
                 st.error(f"❌ ไม่สามารถเขียน Google Sheets: {e}")
@@ -253,7 +258,7 @@ else:
         if st.button("ส่งข้อมูลไป Google Sheets"):
             write_to_google_sheets(df_summary)
 
-        # สร้าง HTML ตาราง
+        # HTML ตาราง
         table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม</th></tr>"
         for _, row in df_summary.iterrows():
             table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td><td>{row['แนวโน้มความเค็ม']}</td></tr>"

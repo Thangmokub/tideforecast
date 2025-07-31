@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
-from prophet import Prophet
-import matplotlib.pyplot as plt
-import os
 from datetime import datetime
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import os
 
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
@@ -95,28 +94,25 @@ st.markdown(r"""
 
 # ส่วนต้อนรับ
 if not st.session_state.app_started:
-    st.markdown("""
-    <div class="fade-box fade-in" style="text-align:center; margin-top:100px;">
+    st.markdown("""<div class="fade-box fade-in" style="text-align:center; margin-top:100px;">
         <h1>👩‍🌾 ยินดีต้อนรับสู่ระบบพยากรณ์น้ำขึ้นน้ำลงเพื่อการเกษตร</h1>
         <p style="font-size:20px;">กดปุ่มด้านล่างเพื่อเข้าสู่แอป</p>
-    </div>
-    """, unsafe_allow_html=True)
+    </div>""", unsafe_allow_html=True)
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
-        
+
 
 # ========================
 # ส่วนหลักของแอป (หน้าหลักหลังจากกดเริ่ม)
 # ========================
 else:
-    st.markdown("""
-    <div class="fade-in">
+    st.markdown("""<div class="fade-in">
         <div class="fade-box">
             <h2>🌾 ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
             <p>ระบบนี้จะแสดงแนวโน้มระดับน้ำรายวันเพื่อช่วยในการวางแผนเพาะปลูก</p>
         </div>
-    """, unsafe_allow_html=True)
+    </div>""", unsafe_allow_html=True)
 
     def load_and_clean_df(df):
         try:
@@ -156,7 +152,7 @@ else:
             st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
             return pd.DataFrame()
 
-    files = ['BP2025_all_months_for_prophet.csv','บางปะกง.csv', 'บางปะกง (3).csv']
+    files = ['BP2025_all_months_for_prophet.csv', 'บางปะกง.csv', 'บางปะกง (3).csv']
     dfs = [load_and_clean_csv(f) for f in files if os.path.isfile(f)]
     df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
 
@@ -217,6 +213,25 @@ else:
             })
 
         df_summary = pd.DataFrame(rows)
+
+        # ------------- ฟังก์ชันสำหรับการเชื่อมต่อ Google Sheets -------------
+        def connect_to_google_sheets():
+            scope = ["https://docs.google.com/spreadsheets/d/1RHi72uEhlTXParxn0jDfLwKJcQGJoamW7XYjvvnhIac/edit?usp=sharing", "https://www.googleapis.com/auth/drive"]
+            creds = ServiceAccountCredentials.from_json_keyfile_name("bangprakong-e632dd777e72.json", scope)
+            client = gspread.authorize(creds)
+            return client
+
+        # ฟังก์ชันสำหรับการเขียนข้อมูลไป Google Sheets
+        def write_to_google_sheets(dataframe, sheet_name):
+            client = connect_to_google_sheets()
+            sheet = client.open_by_key("1RHi72uEhlTXParxn0jDfLwKJcQGJoamW7XYjvvnhIac").sheet1  # ใช้ ID ของ Google Sheets
+            for i, row in dataframe.iterrows():
+                sheet.append_row([row["วันที่"], row["ระดับน้ำ"], row["แนวโน้ม"], row["แนวโน้มความเค็ม"]])  # ส่งข้อมูลไปที่คอลัมน์ A, B, C, D
+
+        # การรับข้อมูลจาก Streamlit และส่งไป Google Sheets
+        if st.button("ส่งข้อมูลไป Google Sheets"):
+            write_to_google_sheets(df_summary, "Water Level Data")  # ใช้ชื่อ Google Sheets ของคุณ
+            st.success("ข้อมูลถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว!")
 
         # สร้าง HTML ตาราง (เพิ่มคอลัมน์แนวโน้มความเค็ม)
         table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม</th></tr>"

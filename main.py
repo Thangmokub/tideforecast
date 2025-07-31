@@ -80,6 +80,7 @@ st.markdown(r"""
     .green-table th:nth-child(4), .green-table td:nth-child(4) { width: 20%; }
     .green-table th:nth-child(5), .green-table td:nth-child(5) { width: 20%; }
 
+    /* fade-in */
     .fade-in {
         animation: fadeInAnimation ease 1.2s;
         animation-iteration-count: 1;
@@ -89,6 +90,16 @@ st.markdown(r"""
         0% { opacity: 0; }
         100% { opacity: 1; }
     }
+
+    /* fade-out */
+    .fade-out {
+        animation: fadeOutAnimation 3s forwards;
+        animation-delay: 2s; /* รอ 2 วินาทีก่อนเริ่มจาง */
+    }
+    @keyframes fadeOutAnimation {
+        0% { opacity: 1; }
+        100% { opacity: 0; }
+    }
     </style>
     <script>
     document.addEventListener('contextmenu', e => {
@@ -97,6 +108,19 @@ st.markdown(r"""
     });
     </script>
 """, unsafe_allow_html=True)
+
+
+# ==========================
+# ฟังก์ชันแสดงข้อความ fade out
+# ==========================
+def show_fade_message(text, msg_type="success"):
+    color = {"success": "#4caf50", "warning": "#ff9800", "error": "#f44336"}.get(msg_type, "#2196f3")
+    placeholder = st.empty()
+    placeholder.markdown(
+        f'<div class="fade-out" style="color:{color}; font-weight:bold;">{text}</div>',
+        unsafe_allow_html=True
+    )
+
 
 # ==========================
 # ฟังก์ชันทำความสะอาด CSV (แก้ชื่อคอลัมน์แปลกๆ)
@@ -146,6 +170,7 @@ def load_and_clean_csv(file):
         st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
         return pd.DataFrame()
 
+
 # ==========================
 # ส่วนต้อนรับ
 # ==========================
@@ -157,6 +182,7 @@ if not st.session_state.app_started:
 
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
+
 
 # ==========================
 # ส่วนหลัก
@@ -182,12 +208,12 @@ else:
         if os.path.isfile(f):
             df_temp = load_and_clean_csv(f)
             if not df_temp.empty:
-                st.success(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)")
+                show_fade_message(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)", "success")
                 dfs.append(df_temp)
             else:
-                st.warning(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้")
+                show_fade_message(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้", "warning")
         else:
-            st.warning(f"❌ ไม่พบไฟล์ {f}")
+            show_fade_message(f"❌ ไม่พบไฟล์ {f}", "error")
 
     if not dfs:
         st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")

@@ -99,39 +99,42 @@ st.markdown(r"""
 """, unsafe_allow_html=True)
 
 # ==========================
-# ฟังก์ชันทำความสะอาด CSV
+# ฟังก์ชันโหลดและทำความสะอาด CSV
 # ==========================
-def load_and_clean_df(df):
-    def convert(row):
-        try:
-            d, m, y_th = map(int, str(row['วันที่']).split("/"))
-            y_ad = y_th - 543
-            h, mi, s = map(int, str(row['เวลา']).split(":"))
-            return datetime(y_ad, m, d, h, mi, s)
-        except:
-            return pd.NaT
-
-    df['ds'] = df.apply(convert, axis=1)
-    df['y'] = pd.to_numeric(df['ระดับน้ำ'], errors='coerce')
-    return df[['ds', 'y']].dropna()
-
 def load_and_clean_csv(file):
     try:
         df = pd.read_csv(file, encoding='utf-8')
 
-        if {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
-            return load_and_clean_df(df)
+        # แปลงชื่อคอลัมน์แบบต่าง ๆ ให้อยู่ในรูปมาตรฐาน
+        rename_map = {
+            'ds': 'วันที่',
+            'time': 'เวลา',
+            'y': 'ระดับน้ำ'
+        }
+        df.rename(columns=rename_map, inplace=True)
 
-        elif {'ds', 'y'}.issubset(df.columns):
-            df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
-            df['y'] = pd.to_numeric(df['y'], errors='coerce')
-            return df[['ds', 'y']].dropna()
+        # เช็คว่ามีคอลัมน์ครบหรือไม่
+        if not {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
+            return pd.DataFrame()
 
-        elif df.shape[1] >= 3:
-            df.columns = ['วันที่', 'เวลา', 'ระดับน้ำ']
-            return load_and_clean_df(df)
+        def convert(row):
+            try:
+                d, m, y_th = map(int, str(row['วันที่']).split("/"))
+                y_ad = y_th - 543
+                time_parts = str(row['เวลา']).split(":")
+                h = int(time_parts[0])
+                mi = int(time_parts[1]) if len(time_parts) > 1 else 0
+                s = int(time_parts[2]) if len(time_parts) > 2 else 0
+                return datetime(y_ad, m, d, h, mi, s)
+            except:
+                return pd.NaT
 
-        return pd.DataFrame()
+        df['ds'] = df.apply(convert, axis=1)
+        df['y'] = pd.to_numeric(df['ระดับน้ำ'], errors='coerce')
+
+        df_clean = df[['ds', 'y']].dropna().sort_values(by='ds').reset_index(drop=True)
+        return df_clean
+
     except Exception as e:
         st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
         return pd.DataFrame()
@@ -169,7 +172,7 @@ else:
         'สิงหา.csv'
     ]
 
-    # ✅ โหลดข้อมูลจากหลายไฟล์อย่างถูกต้อง
+    # โหลดข้อมูลจากหลายไฟล์
     dfs = []
     for f in files:
         if os.path.isfile(f):

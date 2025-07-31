@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -5,7 +6,6 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
 import locale
-import time
 
 # ==========================
 # ตั้งค่าเบื้องต้น
@@ -21,7 +21,7 @@ except:
     pass
 
 # ==========================
-# CSS + JS ตกแต่ง + fade-out CSS
+# CSS + JS ตกแต่ง
 # ==========================
 st.markdown(r"""
     <style>
@@ -89,16 +89,6 @@ st.markdown(r"""
         0% { opacity: 0; }
         100% { opacity: 1; }
     }
-
-    /* fade out animation */
-    .fade-out {
-        animation: fadeOutAnimation 3s forwards;
-        animation-delay: 2s; /* รอ 2 วินาทีแล้วค่อยเริ่มหาย */
-    }
-    @keyframes fadeOutAnimation {
-        0% { opacity: 1; }
-        100% { opacity: 0; display:none; }
-    }
     </style>
     <script>
     document.addEventListener('contextmenu', e => {
@@ -109,57 +99,52 @@ st.markdown(r"""
 """, unsafe_allow_html=True)
 
 # ==========================
-# ฟังก์ชันโหลดและทำความสะอาด CSV
+# ฟังก์ชันทำความสะอาด CSV (แก้ชื่อคอลัมน์แปลกๆ)
 # ==========================
-def load_and_clean_df(df):
-    def convert(row):
-        try:
-            d, m, y_th = map(int, str(row['วันที่']).split("/"))
-            y_ad = y_th - 543
-            # รองรับเวลาแบบ hh:mm หรือ hh:mm:ss
-            time_str = str(row['เวลา'])
-            parts = time_str.split(":")
-            h = int(parts[0])
-            mi = int(parts[1]) if len(parts) > 1 else 0
-            s = int(parts[2]) if len(parts) > 2 else 0
-            return datetime(y_ad, m, d, h, mi, s)
-        except:
-            return pd.NaT
-
-    df['ds'] = df.apply(convert, axis=1)
-    df['y'] = pd.to_numeric(df['ระดับน้ำ'], errors='coerce')
-    return df[['ds', 'y']].dropna()
-
 def load_and_clean_csv(file):
     try:
         df = pd.read_csv(file, encoding='utf-8')
 
-        if {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
-            return load_and_clean_df(df)
+        # ลบอักขระแปลกในชื่อคอลัมน์
+        df.columns = [col.strip().replace('\ufeff', '').replace('', '') for col in df.columns]
 
-        elif {'ds', 'y'}.issubset(df.columns):
-            df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
-            df['y'] = pd.to_numeric(df['y'], errors='coerce')
-            return df[['ds', 'y']].dropna()
+        # แปลงชื่อคอลัมน์ที่มีโอกาสต่างกันให้เป็นมาตรฐาน
+        col_map = {}
+        for col in df.columns:
+            c = col.lower()
+            if c.startswith('ds'):
+                col_map[col] = 'วันที่'
+            elif c == 'time':
+                col_map[col] = 'เวลา'
+            elif c == 'y':
+                col_map[col] = 'ระดับน้ำ'
+        df.rename(columns=col_map, inplace=True)
 
-        elif df.shape[1] >= 3:
-            df.columns = ['วันที่', 'เวลา', 'ระดับน้ำ']
-            return load_and_clean_df(df)
+        # เช็คว่ามีคอลัมน์ครบหรือไม่
+        if not {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
+            return pd.DataFrame()
 
-        return pd.DataFrame()
+        def convert(row):
+            try:
+                d, m, y_th = map(int, str(row['วันที่']).split("/"))
+                y_ad = y_th - 543
+                time_parts = str(row['เวลา']).split(":")
+                h = int(time_parts[0])
+                mi = int(time_parts[1]) if len(time_parts) > 1 else 0
+                s = int(time_parts[2]) if len(time_parts) > 2 else 0
+                return datetime(y_ad, m, d, h, mi, s)
+            except:
+                return pd.NaT
+
+        df['ds'] = df.apply(convert, axis=1)
+        df['y'] = pd.to_numeric(df['ระดับน้ำ'], errors='coerce')
+
+        df_clean = df[['ds', 'y']].dropna().sort_values(by='ds').reset_index(drop=True)
+        return df_clean
+
     except Exception as e:
         st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
         return pd.DataFrame()
-
-# ==========================
-# ฟังก์ชันแสดงข้อความแบบ fade out
-# ==========================
-def show_fade_message(msg, msg_type="success"):
-    placeholder = st.empty()
-    color = {"success": "#4caf50", "warning": "#ff9800", "error": "#f44336", "info": "#2196f3"}.get(msg_type, "#2196f3")
-    # แสดงข้อความใน div พร้อมคลาส fade-out และสี
-    placeholder.markdown(f'<div class="fade-out" style="color:{color}; font-weight:600;">{msg}</div>', unsafe_allow_html=True)
-    # ไม่สามารถลบข้อความหลัง fade ได้ง่ายๆ ใน Streamlit เลยใช้ animation ลบด้วย CSS อย่างเดียว
 
 # ==========================
 # ส่วนต้อนรับ
@@ -198,12 +183,12 @@ else:
         if os.path.isfile(f):
             df_temp = load_and_clean_csv(f)
             if not df_temp.empty:
-                show_fade_message(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)", "success")
+                st.success(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)")
                 dfs.append(df_temp)
             else:
-                show_fade_message(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้", "warning")
+                st.warning(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้")
         else:
-            show_fade_message(f"❌ ไม่พบไฟล์ {f}", "error")
+            st.warning(f"❌ ไม่พบไฟล์ {f}")
 
     if not dfs:
         st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")

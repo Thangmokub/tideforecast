@@ -6,6 +6,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
 import locale
+import time
 
 # ==========================
 # ตั้งค่าเบื้องต้น
@@ -94,7 +95,7 @@ st.markdown(r"""
     /* fade-out */
     .fade-out {
         animation: fadeOutAnimation 3s forwards;
-        animation-delay: 2s; /* รอ 2 วินาทีก่อนเริ่มจาง */
+        animation-delay: 2s;
     }
     @keyframes fadeOutAnimation {
         0% { opacity: 1; }
@@ -111,16 +112,17 @@ st.markdown(r"""
 
 
 # ==========================
-# ฟังก์ชันแสดงข้อความ fade out
+# ฟังก์ชันแสดงข้อความ fade out แล้วลบจริง
 # ==========================
-def show_fade_message(text, msg_type="success"):
+def show_fade_message_real_disappear(text, msg_type="success", display_time=2, fade_time=3):
     color = {"success": "#4caf50", "warning": "#ff9800", "error": "#f44336"}.get(msg_type, "#2196f3")
     placeholder = st.empty()
     placeholder.markdown(
         f'<div class="fade-out" style="color:{color}; font-weight:bold;">{text}</div>',
         unsafe_allow_html=True
     )
-    # NOTE: ข้อความจะจางเองตาม CSS animation ไม่ต้องใช้ time.sleep
+    time.sleep(display_time + fade_time)
+    placeholder.empty()
 
 
 # ==========================
@@ -209,12 +211,12 @@ else:
         if os.path.isfile(f):
             df_temp = load_and_clean_csv(f)
             if not df_temp.empty:
-                show_fade_message(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)", "success")
+                show_fade_message_real_disappear(f"✅ โหลดข้อมูลจาก {f} สำเร็จ ({len(df_temp)} แถว)", "success")
                 dfs.append(df_temp)
             else:
-                show_fade_message(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้", "warning")
+                show_fade_message_real_disappear(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้", "warning")
         else:
-            show_fade_message(f"❌ ไม่พบไฟล์ {f}", "error")
+            show_fade_message_real_disappear(f"❌ ไม่พบไฟล์ {f}", "error")
 
     if not dfs:
         st.error("❌ ไม่พบข้อมูลที่ใช้งานได้")

@@ -19,8 +19,9 @@ try:
 except:
     pass
 
-
+# ==========================
 # CSS + JS ตกแต่ง
+# ==========================
 st.markdown(r"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
@@ -96,7 +97,9 @@ st.markdown(r"""
     </script>
 """, unsafe_allow_html=True)
 
+# ==========================
 # ฟังก์ชันทำความสะอาด CSV
+# ==========================
 def load_and_clean_csv(file):
     try:
         df = pd.read_csv(file, encoding='utf-8')
@@ -136,7 +139,9 @@ def load_and_clean_csv(file):
         st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
         return pd.DataFrame()
 
+# ==========================
 # ฟังก์ชันเชื่อม Google Sheets (ใช้ ENV)
+# ==========================
 def connect_to_google_sheets():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds_json = os.getenv("GCP_CREDENTIALS")  # ดึงจาก Environment Variable
@@ -161,8 +166,9 @@ def write_to_google_sheets(dataframe):
     except Exception as e:
         st.error(f"❌ ไม่สามารถเขียน Google Sheets: {e}")
 
-
+# ==========================
 # ส่วนต้อนรับ
+# ==========================
 if not st.session_state.app_started:
     st.markdown("""<div class="fade-box fade-in" style="text-align:center; margin-top:100px;">
         <h1>ยินดีต้อนรับสู่ระบบพยากรณ์น้ำขึ้นน้ำลงเพื่อการเกษตร</h1>
@@ -172,16 +178,25 @@ if not st.session_state.app_started:
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
 
-
+# ==========================
 # Main
+# ==========================
 else:
-    st.markdown("""<div class="fade-in">
+    # --- Fade in แค่ครั้งแรก ---
+    if 'first_load' not in st.session_state:
+        st.session_state.first_load = True
+    else:
+        st.session_state.first_load = False
+
+    container_class = "fade-in" if st.session_state.first_load else ""
+    st.markdown(f"""<div class="{container_class}">
         <div class="fade-box">
             <h2>ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
             <p>ระบบนี้จะแสดงแนวโน้มระดับน้ำรายวันเพื่อช่วยในการวางแผนเพาะปลูก</p>
         </div>
     </div>""", unsafe_allow_html=True)
 
+    # --- โหลดข้อมูล ---
     files = [
         'บางปะกง.csv',
         'บางปะกง (3).csv',
@@ -207,6 +222,7 @@ else:
 
     df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
 
+    # --- คำนวณค่าต่างๆ ---
     median_level = 2.82
     high_threshold = 3.51
     low_threshold = 1.90
@@ -214,6 +230,14 @@ else:
     months = pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y").tolist()
     month = st.selectbox("เลือกเดือน", months)
 
+    # --- ตรวจจับเปลี่ยนเดือน ---
+    if 'prev_month' not in st.session_state:
+        st.session_state.prev_month = month
+
+    fade_table_class = "fade-in" if st.session_state.prev_month != month else ""
+    st.session_state.prev_month = month
+
+    # --- สร้างตารางตามเดือน ---
     try:
         month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")
     except:
@@ -262,10 +286,11 @@ else:
         if st.button("ส่งข้อมูลไป Google Sheets"):
             write_to_google_sheets(df_summary)
 
-        table_html = "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม</th></tr>"
-        for _, row in df_summary.iterrows():
-            table_html += f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td><td>{row['แนวโน้มความเค็ม']}</td></tr>"
-        table_html += "</table>"
-
+        # --- ใส่ fade-in ทุกครั้งที่เปลี่ยนเดือน ---
+        st.markdown(f"<div class='{fade_table_class}'>", unsafe_allow_html=True)
         st.markdown("🗓️ **แนวโน้มรายวันของเดือน**", unsafe_allow_html=True)
-        st.markdown(table_html, unsafe_allow_html=True)
+        st.markdown("<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม</th></tr>" +
+            "".join([f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td><td>{row['แนวโน้มความเค็ม']}</td></tr>"
+                     for _, row in df_summary.iterrows()]) +
+            "</table>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)

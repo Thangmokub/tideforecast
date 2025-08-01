@@ -3,14 +3,12 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import gspread
-from google.oauth2.service_account import Credentials  # <-- ใช้ google-auth แทน oauth2client
+from google.oauth2.service_account import Credentials 
 import json
 import os
 import locale
 
-# ==========================
 # ตั้งค่าเบื้องต้น
-# ==========================
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
 if 'app_started' not in st.session_state:
@@ -21,9 +19,8 @@ try:
 except:
     pass
 
-# ==========================
+
 # CSS + JS ตกแต่ง
-# ==========================
 st.markdown(r"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
@@ -99,9 +96,7 @@ st.markdown(r"""
     </script>
 """, unsafe_allow_html=True)
 
-# ==========================
 # ฟังก์ชันทำความสะอาด CSV
-# ==========================
 def load_and_clean_csv(file):
     try:
         df = pd.read_csv(file, encoding='utf-8')
@@ -141,9 +136,7 @@ def load_and_clean_csv(file):
         st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
         return pd.DataFrame()
 
-# ==========================
 # ฟังก์ชันเชื่อม Google Sheets (ใช้ ENV)
-# ==========================
 def connect_to_google_sheets():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds_json = os.getenv("GCP_CREDENTIALS")  # ดึงจาก Environment Variable
@@ -169,9 +162,8 @@ def write_to_google_sheets(dataframe):
     except Exception as e:
         st.error(f"❌ ไม่สามารถเขียน Google Sheets: {e}")
 
-# ==========================
+
 # ส่วนต้อนรับ
-# ==========================
 if not st.session_state.app_started:
     st.markdown("""<div class="fade-box fade-in" style="text-align:center; margin-top:100px;">
         <h1>ยินดีต้อนรับสู่ระบบพยากรณ์น้ำขึ้นน้ำลงเพื่อการเกษตร</h1>
@@ -181,9 +173,8 @@ if not st.session_state.app_started:
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
 
-# ==========================
-# ส่วนหลัก
-# ==========================
+
+# Main
 else:
     st.markdown("""<div class="fade-in">
         <div class="fade-box">

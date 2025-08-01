@@ -234,11 +234,7 @@ else:
     month = st.selectbox("เลือกเดือน", months)
 
     # --- ตรวจจับเปลี่ยนเดือน ---
-    if 'prev_month' not in st.session_state:
-        st.session_state.prev_month = month
-
-    fade_table_class = "fade-in" if st.session_state.prev_month != month else ""
-    st.session_state.prev_month = month
+    fade_table_class = "fade-in"
 
     # --- สร้างตารางตามเดือน ---
     try:

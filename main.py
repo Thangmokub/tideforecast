@@ -82,14 +82,13 @@ st.markdown(r"""
     .green-table th:nth-child(4), .green-table td:nth-child(4) { width: 20%; }
     .green-table th:nth-child(5), .green-table td:nth-child(5) { width: 20%; }
 
+    /* เอฟเฟกต์ fade + slide */
     .fade-in {
-        animation: fadeInAnimation ease 1.2s;
-        animation-iteration-count: 1;
-        animation-fill-mode: forwards;
+        animation: fadeSlideIn 0.8s ease forwards;
     }
-    @keyframes fadeInAnimation {
-        0% { opacity: 0; }
-        100% { opacity: 1; }
+    @keyframes fadeSlideIn {
+        0% { opacity: 0; transform: translateY(20px); }
+        100% { opacity: 1; transform: translateY(0); }
     }
     </style>
     <script>
@@ -233,8 +232,14 @@ else:
     months = pd.date_range(df['ds'].min(), df['ds'].max(), freq='MS').strftime("%B %Y").tolist()
     month = st.selectbox("เลือกเดือน", months)
 
-    # --- ตรวจจับเปลี่ยนเดือน ---
-    fade_table_class = "fade-in"
+    # ตรวจจับเปลี่ยนเดือน (ทำให้ fade-in เฉพาะตอนเปลี่ยน)
+    if 'last_month' not in st.session_state:
+        st.session_state.last_month = None
+
+    fade_table_class = ""
+    if st.session_state.last_month != month:
+        fade_table_class = "fade-in"
+        st.session_state.last_month = month
 
     # --- สร้างตารางตามเดือน ---
     try:

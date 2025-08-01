@@ -159,7 +159,7 @@ def write_to_google_sheets(dataframe):
         client = connect_to_google_sheets()
         if not client:
             return
-        sheet = client.open_by_key("1RHi72uEhlTXParxn0jDfLwKJcQGJoamW7XYjvvnhIac").sheet1
+        sheet = client.open_by_key("1WwUp5O99cr2I-m-wytpJejVcT2i9N9Ufp6Ww9J7kPYw").sheet1
         data = [["วันที่", "ระดับเฉลี่ย (ม.)", "แนวโน้ม", "Δ จากวันก่อน (ม.)", "แนวโน้มความเค็ม"]]
         for _, row in dataframe.iterrows():
             data.append([row["วันที่"], row["ระดับเฉลี่ย (ม.)"], row["แนวโน้ม"], row["Δ จากวันก่อน (ม.)"], row["แนวโน้มความเค็ม"]])

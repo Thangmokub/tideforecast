@@ -3,7 +3,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials  # <-- ใช้ google-auth แทน oauth2client
+import json
 import os
 import locale
 
@@ -99,16 +100,12 @@ st.markdown(r"""
 """, unsafe_allow_html=True)
 
 # ==========================
-# ฟังก์ชันทำความสะอาด CSV (แก้ชื่อคอลัมน์แปลกๆ)
+# ฟังก์ชันทำความสะอาด CSV
 # ==========================
 def load_and_clean_csv(file):
     try:
         df = pd.read_csv(file, encoding='utf-8')
-
-        # ลบอักขระแปลกในชื่อคอลัมน์
         df.columns = [col.strip().replace('\ufeff', '').replace('', '') for col in df.columns]
-
-        # แปลงชื่อคอลัมน์ที่มีโอกาสต่างกันให้เป็นมาตรฐาน
         col_map = {}
         for col in df.columns:
             c = col.lower()
@@ -119,8 +116,6 @@ def load_and_clean_csv(file):
             elif c == 'y':
                 col_map[col] = 'ระดับน้ำ'
         df.rename(columns=col_map, inplace=True)
-
-        # เช็คว่ามีคอลัมน์ครบหรือไม่
         if not {'วันที่', 'เวลา', 'ระดับน้ำ'}.issubset(df.columns):
             return pd.DataFrame()
 
@@ -145,6 +140,34 @@ def load_and_clean_csv(file):
     except Exception as e:
         st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
         return pd.DataFrame()
+
+# ==========================
+# ฟังก์ชันเชื่อม Google Sheets (ใช้ ENV)
+# ==========================
+def connect_to_google_sheets():
+    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds_json = os.getenv("GCP_CREDENTIALS")  # ดึงจาก Environment Variable
+    if not creds_json:
+        st.error("❌ ไม่พบ Environment Variable: GCP_CREDENTIALS")
+        return None
+    creds_dict = json.loads(creds_json)
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+    return gspread.authorize(creds)
+
+def write_to_google_sheets(dataframe):
+    try:
+        client = connect_to_google_sheets()
+        if not client:
+            return
+        sheet = client.open_by_key("1RHi72uEhlTXParxn0jDfLwKJcQGJoamW7XYjvvnhIac").sheet1
+        data = [["วันที่", "ระดับเฉลี่ย (ม.)", "แนวโน้ม", "Δ จากวันก่อน (ม.)", "แนวโน้มความเค็ม"]]
+        for _, row in dataframe.iterrows():
+            data.append([row["วันที่"], row["ระดับเฉลี่ย (ม.)"], row["แนวโน้ม"], row["Δ จากวันก่อน (ม.)"], row["แนวโน้มความเค็ม"]])
+        sheet.clear()
+        sheet.update("A1", data)
+        st.success("✅ ส่งข้อมูลไป Google Sheets สำเร็จ!")
+    except Exception as e:
+        st.error(f"❌ ไม่สามารถเขียน Google Sheets: {e}")
 
 # ==========================
 # ส่วนต้อนรับ
@@ -182,7 +205,6 @@ else:
         if os.path.isfile(f):
             df_temp = load_and_clean_csv(f)
             if not df_temp.empty:
-                # ลบข้อความโหลดข้อมูลสำเร็จออก ไม่แสดงอะไร
                 dfs.append(df_temp)
             else:
                 st.warning(f"⚠️ ไฟล์ {f} ไม่มีข้อมูลที่ใช้ได้")
@@ -246,24 +268,6 @@ else:
             })
 
         df_summary = pd.DataFrame(rows)
-
-        def connect_to_google_sheets():
-            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            creds = ServiceAccountCredentials.from_json_keyfile_name("bangprakong-e632dd777e72.json", scope)
-            return gspread.authorize(creds)
-
-        def write_to_google_sheets(dataframe):
-            try:
-                client = connect_to_google_sheets()
-                sheet = client.open_by_key("1RHi72uEhlTXParxn0jDfLwKJcQGJoamW7XYjvvnhIac").sheet1
-                data = [["วันที่", "ระดับเฉลี่ย (ม.)", "แนวโน้ม", "Δ จากวันก่อน (ม.)", "แนวโน้มความเค็ม"]]
-                for _, row in dataframe.iterrows():
-                    data.append([row["วันที่"], row["ระดับเฉลี่ย (ม.)"], row["แนวโน้ม"], row["Δ จากวันก่อน (ม.)"], row["แนวโน้มความเค็ม"]])
-                sheet.clear()
-                sheet.update("A1", data)
-                st.success("✅ ส่งข้อมูลไป Google Sheets สำเร็จ!")
-            except Exception as e:
-                st.error(f"❌ ไม่สามารถเขียน Google Sheets: {e}")
 
         if st.button("ส่งข้อมูลไป Google Sheets"):
             write_to_google_sheets(df_summary)

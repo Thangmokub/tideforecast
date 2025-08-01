@@ -7,8 +7,11 @@ from google.oauth2.service_account import Credentials
 import json
 import os
 import locale
+import random
 
+# ==========================
 # ตั้งค่าเบื้องต้น
+# ==========================
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
 if 'app_started' not in st.session_state:
@@ -144,7 +147,7 @@ def load_and_clean_csv(file):
 # ==========================
 def connect_to_google_sheets():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds_json = os.getenv("GCP_CREDENTIALS")  # ดึงจาก Environment Variable
+    creds_json = os.getenv("GCP_CREDENTIALS")
     if not creds_json:
         st.error("❌ ไม่พบ Environment Variable: GCP_CREDENTIALS")
         return None
@@ -182,14 +185,14 @@ if not st.session_state.app_started:
 # Main
 # ==========================
 else:
-    # --- Fade in แค่ครั้งแรก ---
+    # --- Fade-in ครั้งแรกเข้า Main ---
     if 'first_load' not in st.session_state:
         st.session_state.first_load = True
     else:
         st.session_state.first_load = False
 
     container_class = "fade-in" if st.session_state.first_load else ""
-    st.markdown(f"""<div class="{container_class}">
+    st.markdown(f"""<div key="{random.randint(1,1_000_000)}" class="{container_class}">
         <div class="fade-box">
             <h2>ระบบพยากรณ์น้ำขึ้นน้ำลง</h2>
             <p>ระบบนี้จะแสดงแนวโน้มระดับน้ำรายวันเพื่อช่วยในการวางแผนเพาะปลูก</p>
@@ -286,11 +289,15 @@ else:
         if st.button("ส่งข้อมูลไป Google Sheets"):
             write_to_google_sheets(df_summary)
 
-        # --- ใส่ fade-in ทุกครั้งที่เปลี่ยนเดือน ---
-        st.markdown(f"<div class='{fade_table_class}'>", unsafe_allow_html=True)
+        # --- Fade-in ทุกครั้งเมื่อเปลี่ยนเดือน ---
+        st.markdown(f"<div key='{random.randint(1,1_000_000)}' class='{fade_table_class}'>", unsafe_allow_html=True)
         st.markdown("🗓️ **แนวโน้มรายวันของเดือน**", unsafe_allow_html=True)
-        st.markdown("<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม</th></tr>" +
-            "".join([f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td><td>{row['แนวโน้มความเค็ม']}</td></tr>"
-                     for _, row in df_summary.iterrows()]) +
-            "</table>", unsafe_allow_html=True)
+        st.markdown(
+            "<table class='green-table'><tr><th>วันที่</th><th>ระดับเฉลี่ย (ม.)</th><th>แนวโน้ม</th><th>Δ จากวันก่อน (ม.)</th><th>แนวโน้มความเค็ม</th></tr>" +
+            "".join([
+                f"<tr><td>{row['วันที่']}</td><td>{row['ระดับเฉลี่ย (ม.)']}</td><td>{row['แนวโน้ม']}</td><td>{row['Δ จากวันก่อน (ม.)']}</td><td>{row['แนวโน้มความเค็ม']}</td></tr>"
+                for _, row in df_summary.iterrows()
+            ]) +
+            "</table>", unsafe_allow_html=True
+        )
         st.markdown("</div>", unsafe_allow_html=True)

@@ -158,7 +158,6 @@ def write_to_google_sheets(dataframe):
             data.append([row["วันที่"], row["ระดับเฉลี่ย (ม.)"], row["แนวโน้ม"], row["Δ จากวันก่อน (ม.)"], row["แนวโน้มความเค็ม"]])
         sheet.clear()
         sheet.update("A1", data)
-        st.success("✅ ส่งข้อมูลไป Google Sheets สำเร็จ!")
     except Exception as e:
         st.error(f"❌ ไม่สามารถเขียน Google Sheets: {e}")
 

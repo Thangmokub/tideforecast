@@ -9,9 +9,8 @@ import os
 import locale
 import random
 
-# ==========================
-# ตั้งค่าเบื้องต้น
-# ==========================
+
+# setting
 st.set_page_config(page_title="พยากรณ์น้ำขึ้นน้ำลง", page_icon="🌊")
 
 if 'app_started' not in st.session_state:
@@ -22,9 +21,8 @@ try:
 except:
     pass
 
-# ==========================
-# CSS + JS ตกแต่ง
-# ==========================
+
+# css+js dec
 st.markdown(r"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
@@ -99,9 +97,7 @@ st.markdown(r"""
     </script>
 """, unsafe_allow_html=True)
 
-# ==========================
 # ฟังก์ชันทำความสะอาด CSV
-# ==========================
 def load_and_clean_csv(file):
     try:
         df = pd.read_csv(file, encoding='utf-8')
@@ -141,9 +137,8 @@ def load_and_clean_csv(file):
         st.warning(f"⚠️ อ่านไฟล์ {file} ไม่ได้: {e}")
         return pd.DataFrame()
 
-# ==========================
+
 # ฟังก์ชันเชื่อม Google Sheets (ใช้ ENV)
-# ==========================
 def connect_to_google_sheets():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds_json = os.getenv("GCP_CREDENTIALS")
@@ -163,14 +158,19 @@ def write_to_google_sheets(dataframe):
         data = [["วันที่", "ระดับเฉลี่ย (ม.)", "แนวโน้ม", "Δ จากวันก่อน (ม.)", "แนวโน้มความเค็ม"]]
         for _, row in dataframe.iterrows():
             data.append([row["วันที่"], row["ระดับเฉลี่ย (ม.)"], row["แนวโน้ม"], row["Δ จากวันก่อน (ม.)"], row["แนวโน้มความเค็ม"]])
-        sheet.clear()
-        sheet.update("A1", data)
+
+        existing = sheet.get_all_values()
+        if not existing:
+            sheet.update("A1", data[:1])  # header
+
+        start_row = len(existing) + 1
+        sheet.update(f"A{start_row}", data[1:])  # append rows
+
     except Exception as e:
         st.error(f"❌ ไม่สามารถเขียน Google Sheets: {e}")
 
-# ==========================
+
 # ส่วนต้อนรับ
-# ==========================
 if not st.session_state.app_started:
     st.markdown("""<div class="fade-box fade-in" style="text-align:center; margin-top:100px;">
         <h1>ยินดีต้อนรับสู่ระบบพยากรณ์น้ำขึ้นน้ำลงเพื่อการเกษตร</h1>
@@ -180,11 +180,9 @@ if not st.session_state.app_started:
     if st.button("เริ่มใช้งาน"):
         st.session_state.app_started = True
 
-# ==========================
 # Main
-# ==========================
 else:
-    # --- Fade-in ครั้งแรกเข้า Main ---
+    # fade main
     if 'first_load' not in st.session_state:
         st.session_state.first_load = True
     else:
@@ -198,7 +196,7 @@ else:
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # --- โหลดข้อมูล ---
+    # File
     files = [
         'บางปะกง.csv',
         'บางปะกง (3).csv',
@@ -224,7 +222,7 @@ else:
 
     df = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='ds').sort_values(by='ds')
 
-    # --- คำนวณค่าต่างๆ ---
+    # Norm level
     median_level = 2.82
     high_threshold = 3.51
     low_threshold = 1.90
@@ -241,7 +239,7 @@ else:
         fade_table_class = "fade-in"
         st.session_state.last_month = month
 
-    # --- สร้างตารางตามเดือน ---
+    # table
     try:
         month_dt = pd.to_datetime("01 " + month, format="%d %B %Y")
     except:
@@ -290,7 +288,7 @@ else:
         if st.button("ส่งข้อมูลไป Google Sheets"):
             write_to_google_sheets(df_summary)
 
-        # --- Fade-in ทุกครั้งเมื่อเปลี่ยนเดือน ---
+        # fade month
         st.markdown(f"<div key='{random.randint(1,1_000_000)}' class='{fade_table_class}'>", unsafe_allow_html=True)
         st.markdown("🗓️ **แนวโน้มรายวันของเดือน**", unsafe_allow_html=True)
         st.markdown(
